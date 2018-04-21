@@ -11,7 +11,7 @@ module.exports.Provision = async (req) => {
             var pipStr = element.replace("@", "==");
             try {
                 //use venv pip so we don't have to activate
-                await exec(dir + "/Scripts/pip install " + pipStr).then(console.log(element + " installed"));
+                await exec(path.join(dir, "Scripts/pip") + " install " + pipStr).then(console.log(element + " installed"));
             } catch(err) {
                 console.log(err); //TODO improve this error handling
             }
