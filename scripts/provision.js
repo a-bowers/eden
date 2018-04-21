@@ -29,7 +29,7 @@ module.exports.Provision = async (req) => {
 
 module.exports.ProvisionTest = () => {
     var request = {
-        "directory" : "C:/Users/A/Documents/GitHub/eden/env",
+        "directory" : path.join(os.tmpdir(), "_provisionEnv"),
         "requirements" : ["numpy", "matplotlib"]
     };
     debug(module.exports.Provision(request));
