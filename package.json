@@ -24,7 +24,16 @@
     "dotenv": "^5.0.1",
     "express": "^4.16.3",
     "express-jwt": "^5.3.1",
-    "pg": "^7.4.1"
+    "fs-extra": "^5.0.0",
+    "gunzip-maybe": "^1.4.1",
+    "md5": "^2.2.1",
+    "pg": "^7.4.1",
+    "pump": "^3.0.0",
+    "python-shell": "^0.5.0",
+    "request": "^2.85.0",
+    "streamifier": "^0.1.1",
+    "tar-fs": "^1.16.0",
+    "url-join": "^4.0.0"
   },
   "devDependencies": {
     "@types/eslint": "^4.16.0",
