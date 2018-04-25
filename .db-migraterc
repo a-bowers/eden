@@ -1,0 +1,4 @@
+{
+    "migrations-dir": "./src/queue/migrations",
+    "sql-file": true
+}
