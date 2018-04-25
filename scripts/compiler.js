@@ -40,7 +40,8 @@ module.exports = (options, cb) => {
     
     try{ 
         var requirements = await fs.readFile(path.join(pyDir, requirementsFileName));
-        const s3url = urljoin("https://eden.goph.me/modules/", md5(requirements));
+        const s3url = urljoin("https://eden.goph.me/modules/", md5(requirements) + ".tar.gz");
+        console.log("Looking for " + s3url);
         
         var res = await rp(s3url);
         const { statusCode } = res;
