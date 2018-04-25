@@ -11,7 +11,7 @@ const os = require('os');
 const path = require('path');
 const urljoin = require('url-join');
 const md5 = require('md5');
-const request = require('request');
+const rp = require('request-promise-native');
 const fs = require('fs-extra');
 const streamify = require('streamifier');
 const gunzip = require('gunzip-maybe');
@@ -22,15 +22,14 @@ const pythonShell = require('python-shell');
 const pyDirName = "_pyEnv";
 const archiveName = "env.zip";
 const pyHelperName = "helper.py";
-const userScriptName = "script.py"; //Make sure these names are maintained by the cli
+const userScriptName = "script.py"; //Make sure these two names are maintained by the cli
 const requirementsFileName = "requirements.txt";
 
 module.exports = (options, cb) => {
     const pyDir = path.join(os.tmpdir(), pyDirName);
     const archivePath = path.join(pyDir, archiveName);
 
-    try {
-        //set up directory and extract reqs and script from options.script
+    try { //set up directory and extract reqs and script from options.script
         await fs.mkdir(pyDir);
         await fs.writeFile(path.join(pyDir, pyHelperName), pyFile);
         var scriptStream = streamify.createReadStream(Buffer.from(options.script));
@@ -40,27 +39,26 @@ module.exports = (options, cb) => {
     }
     
     try{ 
-        var requirements = await fs.readFile(path.join(pyDir, requirementsFileName)); //get requirements from file
-        const s3url = urljoin("https://eden.goph.me/modules/", options.secrets['clientID'], options.meta['name'], md5(requirements));
+        var requirements = await fs.readFile(path.join(pyDir, requirementsFileName));
+        const s3url = urljoin("https://eden.goph.me/modules/", md5(requirements));
         
-        var res = await request(s3url);
+        var res = await rp(s3url);
         const { statusCode } = res;
         if(statusCode === 200) {
             await UnpackArchive(res, pyDir);
             return cb(null, RunPython); //Pass the new webtask function back
-        } else if(statusCode === 404){
-            //no archive, call the provisioner and wait for code 300
+        } else if(statusCode === 404){ //no archive, call the provisioner and wait for code 300
             const provisionerurl = "google.com"; //TODO
-            var provRes = await request(provisionerurl);
+            var provRes = await rp.post(provisionerurl,
+                { formData: { file: fs.createReadStream(path.join(pyDir, requirementsFileName)) }
+            });
             //await UnpackArchive(res, pyDir);
             return cb("Provisioning; " + provRes, null); //for now we do not wait for response, just error out
-        } else {
-            //something else went wrong
+        } else { //something else went wrong with the s3 call
             return cb(res, null);
-            //throw res;
         }
     } catch(err) {
-        fs.remove(pyDir).catch((err) => reject("Deletion error: " + err));
+        fs.remove(pyDir).catch((err) => reject("Error setting up python: " + err));
         console.log("Error: " + err);
     }
 };
@@ -80,11 +78,12 @@ function UnpackArchive(srcStream, dest) {
     });
 }
 
+//This is the function passed back as the new webtask from the compiler
 function RunPython(context, req, res) {
     return new Promise((resolve, reject) => {
         const pyDir = path.join(os.tmpdir(), pyDirName);
         var options = { 
-            scriptPath: pyDir,
+            scriptPath: pyDir, //TODO Hash for user script name?
             pythonOptions: ["-W ignore"],
             args: [pyDir, path.join(pyDir, userScriptName)] //TODO add ability to add system args
         };
@@ -101,9 +100,9 @@ const pyFile = //TODO call correct user script function
 `import sys
 import imp
 
-def Process(dir, scriptPath):
+def RunPython(dir, scriptPath):
     sys.path.append(dir)
     module = imp.load_source("script", scriptPath)
-    module.Process(src, dest)
+    module.Main()
 
-Process(sys.argv[1], sys.argv[2])`;
+RunPython(sys.argv[1], sys.argv[2])`;
