@@ -26,7 +26,7 @@ const userScriptName = "script.py"; //Make sure these two names are maintained b
 const requirementsFileName = "requirements.txt";
 
 module.exports.compile = async (options, cb) => {
-    const pyDir = path.join(os.tmpdir(), pyDirName);
+    const pyDir = path.join(os.tmpdir(), options.meta.name);
     const archivePath = path.join(pyDir, archiveName);
 
     try { //set up directory and extract reqs and script from options.script
@@ -102,7 +102,7 @@ function GetPythonLibrary(url, dest) {
 //This is the function passed back as the new webtask from the compiler
 function RunPython(context, req, res) {
     return new Promise((resolve, reject) => {
-        const pyDir = path.join(os.tmpdir(), pyDirName);
+        const pyDir = path.join(os.tmpdir(), context.meta.name);
         var options = { 
             scriptPath: pyDir, //TODO Hash for user script name?
             pythonOptions: ["-W ignore"],
