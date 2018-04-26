@@ -7,16 +7,8 @@ module.exports.Provision = async (req) => {
         var dir = req.directory;
         debug("Setting up virtual environment");
         await exec("virtualenv --no-site-packages " + dir).then(debug("Environment set up"));
-        req.requirements.forEach(async element => {
-            debug("Installing " + element);
-            var pipStr = element.replace("@", "==");
-            try {
-                //use venv pip so we don't have to activate
-                await exec(path.join(dir, "Scripts/pip") + " install " + pipStr).then(debug(element + " installed"));
-            } catch(err) {
-                console.log(err); //TODO improve this error handling
-            }
-        });
+        //use venv pip so we don't have to activate
+        await exec(path.join(dir, "Scripts/pip") + " install -r " + path.join(dir, "requirements.txt"));
         //TODO remove base python stuff if necessary
         await debug("Modules installed successfully");
         return { "status" : "success" };
@@ -29,8 +21,7 @@ module.exports.Provision = async (req) => {
 
 module.exports.ProvisionTest = () => {
     var request = {
-        "directory" : path.join(os.tmpdir(), "_provisionEnv"),
-        "requirements" : ["numpy", "matplotlib"]
+        "directory" : path.join(os.tmpdir(), "_provisionEnv")
     };
     debug(module.exports.Provision(request));
 }
