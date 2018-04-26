@@ -6,7 +6,7 @@ module.exports.Provision = async (req) => {
     try {
         var dir = req.directory;
         debug("Setting up virtual environment");
-        await exec("virtualenv --no-site-packages " + dir).then(debug("Environment set up"));
+        await exec("virtualenv --no-site-packages --always-copy " + dir).then(debug("Environment set up"));
         //use venv pip so we don't have to activate
         await exec(path.join(dir, "Scripts/pip") + " install -r " + path.join(dir, "requirements.txt"));
         //TODO remove base python stuff if necessary
