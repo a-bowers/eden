@@ -43,27 +43,24 @@ module.exports.compile = async (options, cb) => {
         const s3url = urljoin("https://eden.goph.me.s3.amazonaws.com/modules/", md5(requirements) + ".tar.gz");
         console.log("Looking for " + s3url);
 
-        var s3options = {
-            url: s3url,
-            rejectUnauthorized: false
-        }
-        
-        var res = rp(s3options).on('response', async (response) => {
-            if(response.statusCode === 200) { return }
-            if(response.statusCode === 404){//no archive, call the provisioner and wait for code 300
+        try {
+            await GetPythonLibrary(s3url, pyDir);
+        } catch(err) {
+            if(err === 404){//no archive, call the provisioner and wait for code 300
                 const provisionerurl = "google.com"; //TODO
-                var provRes = await rp.post(provisionerurl,
-                    { formData: { file: fs.createReadStream(path.join(pyDir, requirementsFileName)) } });
+                var provRes = rp.post(provisionerurl,
+                    { formData: { file: fs.createReadStream(path.join(pyDir, requirementsFileName)) } }
+                );
                 //await UnpackArchive(res, pyDir);
                 return cb("Provisioning; " + provRes, null); //for now we do not wait for response, just error out
-            } else { //something else went wrong with the s3 call
-                return cb(response.statusCode, null); //TODO fix these responses
             }
-        });
-        await UnpackArchive(res, pyDir);
-        return cb(null, RunPython); //Pass the new webtask function back
+            return cb(err, null)
+        }
+
+        return cb(null, RunPython) //Pass the new webtask function back
+
     } catch(err) {
-        //fs.remove(pyDir).catch((err) => reject("Error setting up python: " + err));
+        fs.remove(pyDir).catch((err) => reject("Error setting up python: " + err));
         console.log("Error: " + err);
     }
 };
@@ -80,6 +77,25 @@ function UnpackArchive(srcStream, dest) {
                 resolve();
             }
         });
+    });
+}
+
+function GetPythonLibrary(url, dest) {
+    return new Promise ((resolve, reject) => {
+        var s3options = {
+            url: url,
+            rejectUnauthorized: false
+        }
+
+        try {
+            rp(s3options).on('response', async (response) => {
+                if(response.statusCode === 200) return;
+                throw(response.statusCode); //something else went wrong with the s3 call
+            });
+            UnpackArchive(req, dest).then(resolve());
+        } catch(err) {
+            reject(err);
+        }
     });
 }
 
