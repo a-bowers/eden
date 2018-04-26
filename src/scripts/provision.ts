@@ -13,19 +13,22 @@ const writeFileAsync = promisify(writeFile);
 
 async function installModules(directory: string, requirements: string) {
     logger.debug("Setting up virtual environment");
-    const responseFromSetup = await execAsync(`virtualenv --no-site-packages --always-copy ${directory}`);
+    const responseFromSetup = await execAsync(`virtualenv --no-site-packages --always-copy ${directory}`, {
+        cwd: directory
+    });
     logger.verbose("Setting up module finished with", responseFromSetup);
     logger.debug("Environment set up");
 
-    await writeFileAsync(path.join(directory, 'requirements.txt'), requirements, {
+    const requirementsFilePath = path.join(directory, 'requirements.txt');
+    await writeFileAsync(requirementsFilePath, requirements, {
         encoding: 'ascii'
     })
 
     logger.debug("Starting to install modules");
 
     logger.verbose("requirements.txt ->", requirements);
-    const responseFromInstall =  await execAsync("Scripts/pip install -r requirements.txt", {
-        cwd: directory
+    const responseFromInstall =  await execAsync("pip install -r ../requirements.txt", {
+        cwd: directory + "/Scripts"
     });
 
     logger.verbose("installing finished", responseFromInstall);
@@ -33,16 +36,7 @@ async function installModules(directory: string, requirements: string) {
 }
 
 function zipModules(directory: string) {
-    directory = path.join(directory, 'lib/site-packages');
-
-    const watcher = chokidar.watch(directory, {
-        awaitWriteFinish: {
-            pollInterval: 500,
-            stabilityThreshold: 2000,
-        },
-        cwd: directory,
-        followSymlinks: false,
-    });
+    directory = path.join(directory, 'Lib/site-packages');
 
     const arch = archiver('tar', {
         zlib: {
@@ -62,13 +56,7 @@ function zipModules(directory: string) {
         arch.on('finish', () => resolve(true));
     });
 
-    watcher.on('add', (filePath) => {
-        arch.file(filePath, {});
-    });
-
-    promise.finally(() => {
-        watcher.close();
-    })
+    arch.directory(directory, false);
 
     return {
         promise,
@@ -82,20 +70,19 @@ export async function provision(job: Job) {
         const {requirements, directory, s3Path} = req;
         logger.info("Fetching modules");
 
-        const arch = zipModules(directory);
         const stream = createWriteStream('tmp.tar.gz');
-
-        arch.stream.pipe(stream);
         try {
-            await installModules(requirements, directory);
+            await installModules(directory, requirements);
+            const arch = zipModules(directory);
+            arch.stream.pipe(stream);
             arch.stream.finalize();
+            await arch.promise;
         } catch (err) {
-            arch.stream.abort();
             stream.destroy();
             logger.debug("Failed to install modules", err);
             return job.failed(err);
         }
-
+        
         return job.success();
 
     } catch(err) {
