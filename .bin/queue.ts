@@ -41,7 +41,7 @@ async function publish(arg: yargs.Arguments) {
 async function subscribe(arg: yargs.Arguments) {
     const {t, e} = arg;
     const queue = await Queue.create();
-    await queue.job('kappa', async (job) => {
+    queue.job('kappa', async (job) => {
         console.log("Ayyyyy kappa kappa", e);
         job.success();
     });
