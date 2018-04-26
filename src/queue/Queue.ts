@@ -43,7 +43,7 @@ async function createJob(client: pg.PoolClient, type: string, metadata: any) {
 export type JobHandler = (job: Job) => Promise<void>;
 
 export class Queue {
-    public static async create(dbUrl = process.env.DATABASE_URL) {
+    public static async create(dbUrl = process.env.DATABASE_URL, concurrency = 5) {
         if (!dbUrl) {
             throw new Error("Error Initializing Queue: You must either set environment variable DATABASE_URL or pass dbUrl explicitly")
         }
@@ -52,14 +52,15 @@ export class Queue {
         const pool = new pg.Pool({
             connectionString: dbUrl
         });
-        return new Queue(client, pool);
+        return new Queue(client, pool, concurrency);
     }
 
     private jobMap = new Map<string, JobHandler>();
-
+    private current = 0;
     private constructor(
         private readonly client: pg.Client,
         private readonly pool: pg.Pool,
+        public readonly maxConcurrency: number,
     ) {
         this.handleNotification = this.handleNotification.bind(this);
         // Ugly hack is needed as upstream type do not support notification
@@ -78,7 +79,7 @@ export class Queue {
 
     public job(type: string, handler: (job: Job) => Promise<void>) {
         if (this.jobMap.has(type)) {
-            throw new Error('You can one job Can listen at a time');
+            throw new Error('You can only assign one listener per job');
         }
         this.jobMap.set(type, handler);
         this.subscribe(`pg_queue_simple_trigger_created_${type}`);
@@ -92,23 +93,27 @@ export class Queue {
 
     // Simple logic to run handlers
     private loop(type: string) {
+        if (this.current >= this.maxConcurrency) {
+            return;
+        }
+        this.current++;
         this.transaction(async (client) => {
             const job = await getUnclaimedJob(client, type);
 
             const handler = this.jobMap.get(type);
-            if (!job) {
+            if (!job || !handler) {
+                this.current--;
                 return;
             }
 
-            if (!handler) {
-                return;
+            try {
+                await handler(job);
+            } catch (e){
+                // Job failed handle stuff here, atm it'll auto crash
+                // but we should have better logic
             }
 
-            await handler(job);
             await updateJobStatus(client, job);
-
-            // If we succesfully completed the last one
-            // optimistically check for next
             this.loop(type);
         });
     }
@@ -129,7 +134,7 @@ export class Queue {
         this.loop(jobName);
     }
 
-    // Gets first job from the table
+    // Gets a transaction
     private async transaction(fn: (client: pg.PoolClient) => Promise<any>) {
         const client = await this.pool.connect();
 
