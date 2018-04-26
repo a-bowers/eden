@@ -56,7 +56,7 @@ module.exports.compile = async (options, cb) => {
                     url: "https://example.com", //TODO
                     json: requestData,
                     headers: {
-                        authorization: token
+                        Authorization: 'Bearer ' + token
                     }
                 }
 
