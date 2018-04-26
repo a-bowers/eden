@@ -11,7 +11,7 @@ const os = require('os');
 const path = require('path');
 const urljoin = require('url-join');
 const md5 = require('md5');
-const rp = require('request-promise-native');
+const rp = require('request');
 const fs = require('fs-extra');
 const streamify = require('streamifier');
 const gunzip = require('gunzip-maybe');
@@ -25,41 +25,45 @@ const pyHelperName = "helper.py";
 const userScriptName = "script.py"; //Make sure these two names are maintained by the cli
 const requirementsFileName = "requirements.txt";
 
-module.exports = (options, cb) => {
+module.exports.compile = async (options, cb) => {
     const pyDir = path.join(os.tmpdir(), pyDirName);
     const archivePath = path.join(pyDir, archiveName);
 
     try { //set up directory and extract reqs and script from options.script
-        await fs.mkdir(pyDir);
+        await fs.ensureDir(pyDir);
         await fs.writeFile(path.join(pyDir, pyHelperName), pyFile);
         var scriptStream = streamify.createReadStream(Buffer.from(options.script));
         await UnpackArchive(scriptStream, pyDir);
     } catch(err) {
-        console.log("Error: " + err);
+        console.log("Setup error: " + err);
     }
     
     try{ 
         var requirements = await fs.readFile(path.join(pyDir, requirementsFileName));
-        const s3url = urljoin("https://eden.goph.me/modules/", md5(requirements) + ".tar.gz");
+        const s3url = urljoin("https://eden.goph.me.s3.amazonaws.com/modules/", md5(requirements) + ".tar.gz");
         console.log("Looking for " + s3url);
-        
-        var res = await rp(s3url);
-        const { statusCode } = res;
-        if(statusCode === 200) {
-            await UnpackArchive(res, pyDir);
-            return cb(null, RunPython); //Pass the new webtask function back
-        } else if(statusCode === 404){ //no archive, call the provisioner and wait for code 300
-            const provisionerurl = "google.com"; //TODO
-            var provRes = await rp.post(provisionerurl,
-                { formData: { file: fs.createReadStream(path.join(pyDir, requirementsFileName)) }
-            });
-            //await UnpackArchive(res, pyDir);
-            return cb("Provisioning; " + provRes, null); //for now we do not wait for response, just error out
-        } else { //something else went wrong with the s3 call
-            return cb(res, null);
+
+        var s3options = {
+            url: s3url,
+            rejectUnauthorized: false
         }
+        
+        var res = rp(s3options).on('response', async (response) => {
+            if(response.statusCode === 200) { return }
+            if(response.statusCode === 404){//no archive, call the provisioner and wait for code 300
+                const provisionerurl = "google.com"; //TODO
+                var provRes = await rp.post(provisionerurl,
+                    { formData: { file: fs.createReadStream(path.join(pyDir, requirementsFileName)) } });
+                //await UnpackArchive(res, pyDir);
+                return cb("Provisioning; " + provRes, null); //for now we do not wait for response, just error out
+            } else { //something else went wrong with the s3 call
+                return cb(response.statusCode, null); //TODO fix these responses
+            }
+        });
+        await UnpackArchive(res, pyDir);
+        return cb(null, RunPython); //Pass the new webtask function back
     } catch(err) {
-        fs.remove(pyDir).catch((err) => reject("Error setting up python: " + err));
+        //fs.remove(pyDir).catch((err) => reject("Error setting up python: " + err));
         console.log("Error: " + err);
     }
 };
