@@ -1,7 +1,12 @@
 #!/usr/bin/env npx ts-node
+import * as crypto from 'crypto';
 import * as dotenv from 'dotenv';
+import * as fs from 'fs';
+import * as os from 'os';
+import * as path from 'path';
 import * as yargs from 'yargs';
 import {Queue} from '../src/queue/Queue';
+import {provision} from '../src/scripts/provision';
 
 dotenv.load()
 
@@ -32,7 +37,14 @@ yargs
 
 
 async function publish(arg: yargs.Arguments) {
-    const {t, d = '{}'} = arg;
+    const file = fs.readFileSync(path.join(__dirname, './requirements.txt'), 'ascii');
+    const hash = crypto.createHash('md5').update(file).digest('hex');
+    const dir = path.join(os.tmpdir(), hash);
+    process.stdout.write("Writing to", dir);
+    const {t, d = JSON.stringify({
+        directory: dir,
+        requirements: file
+    })} = arg;
     const queue = await Queue.create();
     await queue.publish(t, d);
     process.exit(0);
@@ -41,8 +53,5 @@ async function publish(arg: yargs.Arguments) {
 async function subscribe(arg: yargs.Arguments) {
     const {t, e} = arg;
     const queue = await Queue.create();
-    queue.job('kappa', async (job) => {
-        console.log("Ayyyyy kappa kappa", e);
-        job.success();
-    });
+    queue.job('provision', provision);
 }
