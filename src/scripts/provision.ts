@@ -80,15 +80,19 @@ export async function provision(job: Job) {
         const {requirements, directory, s3Path} = req;
         await ensureDir(directory);
 
-        logger.info("Fetching modules");
 
         const stream = createWriteStream('tmp.tar.gz');
         try {
+            logger.info("Fetching modules");
             await installModules(directory, requirements);
+            logger.info("Fetchinc complete starting to zip and upload");
             const arch = zipModules(directory);
             const uploadPromise = uploadAsync(arch.stream);
             await arch.promise;
+            logger.debug("Archival Complete");
             await uploadPromise;
+            logger.debug("Upload complete");
+            logger.info("Provisioning Complete");
         } catch (err) {
             stream.destroy();
             logger.info("Failed to install modules", err);
