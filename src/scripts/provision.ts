@@ -17,7 +17,7 @@ const writeFileAsync = promisify(writeFile);
 const awsS3 = new S3({
     accessKeyId: env('AWS_ACCESS_KEY_ID'),
     region: 'us-west-2',
-    secretAccessKey: env('AWS_ACCEsS_KEY')
+    secretAccessKey: env('AWS_ACCESS_KEY')
 });
 
 const uploadAsync = promisify(awsS3.upload.bind(awsS3));
@@ -66,7 +66,15 @@ function zipModules(directory: string) {
         arch.on('finish', () => resolve(true));
     });
 
-    arch.directory(directory, false);
+    // Improve this
+    arch.glob('**', {
+        cwd: directory,
+        ignore: [
+            'wheel**',
+            'pip**',
+            'setuptools**',
+        ]
+    });
 
     return {
         promise,
