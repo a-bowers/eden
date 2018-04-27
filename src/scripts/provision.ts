@@ -1,38 +1,48 @@
 import * as archiver from 'archiver';
+// tslint:disable-next-line:no-submodule-imports
+import * as S3 from 'aws-sdk/clients/s3';
 import { exec } from 'child_process';
 import * as chokidar from 'chokidar';
 import { createWriteStream, writeFile } from 'fs';
+import { ensureDir } from 'fs-extra';
 import * as path from 'path';
 import { promisify } from 'util';
+import env from '../env';
 import createLogger from '../logger';
 import { Job } from '../queue/Job';
 
 const logger = createLogger('provisioner');
 const execAsync = promisify(exec);
 const writeFileAsync = promisify(writeFile);
+const awsS3 = new S3({
+    accessKeyId: env('AWS_ACCESS_KEY_ID'),
+    region: 'us-west-2',
+    secretAccessKey: env('AWS_ACCEsS_KEY')
+});
+
+const uploadAsync = promisify(awsS3.upload.bind(awsS3));
 
 async function installModules(directory: string, requirements: string) {
-    logger.debug("Setting up virtual environment");
+    logger.info("Setting up virtual environment");
     const responseFromSetup = await execAsync(`virtualenv --no-site-packages --always-copy ${directory}`, {
         cwd: directory
     });
-    logger.verbose("Setting up module finished with", responseFromSetup);
-    logger.debug("Environment set up");
+    logger.debug("Setting up module finished with", responseFromSetup);
+    logger.info("Environment set up");
 
     const requirementsFilePath = path.join(directory, 'requirements.txt');
     await writeFileAsync(requirementsFilePath, requirements, {
         encoding: 'ascii'
     })
 
-    logger.debug("Starting to install modules");
-
-    logger.verbose("requirements.txt ->", requirements);
+    logger.info("Starting to install modules");
+    logger.debug("requirements.txt ->", requirements);
     const responseFromInstall =  await execAsync("pip install -r ../requirements.txt", {
         cwd: directory + "/Scripts"
     });
 
-    logger.verbose("installing finished", responseFromInstall);
-    logger.debug("Modules successfully installed");
+    logger.debug("installing finished", responseFromInstall);
+    logger.info("Modules successfully installed");
 }
 
 function zipModules(directory: string) {
@@ -68,25 +78,27 @@ export async function provision(job: Job) {
     try {
         const req = job.metadata;
         const {requirements, directory, s3Path} = req;
+        await ensureDir(directory);
+
         logger.info("Fetching modules");
 
         const stream = createWriteStream('tmp.tar.gz');
         try {
             await installModules(directory, requirements);
             const arch = zipModules(directory);
-            arch.stream.pipe(stream);
-            arch.stream.finalize();
+            const uploadPromise = uploadAsync(arch.stream);
             await arch.promise;
+            await uploadPromise;
         } catch (err) {
             stream.destroy();
-            logger.debug("Failed to install modules", err);
+            logger.info("Failed to install modules", err);
             return job.failed(err);
         }
-        
+
         return job.success();
 
     } catch(err) {
-        logger.debug("Unexpected Error while provisioning", err);
+        logger.info("Unexpected Error while provisioning", err);
         return job.failed(err);
     }
 };

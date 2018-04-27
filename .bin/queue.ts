@@ -41,7 +41,6 @@ async function publish(arg: yargs.Arguments) {
     const hash = crypto.createHash('md5').update(file).digest('hex');
     const dir = path.join(os.tmpdir(), "_" + hash);
     process.stdout.write("Writing to " + dir);
-    await fs.ensureDir(dir);
     const {t = "provision" , d = JSON.stringify({
         directory: dir,
         requirements: file
