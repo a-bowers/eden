@@ -39,13 +39,12 @@ module.exports.compile = async (options, cb) => {
     try{
         const requirementsFilePath = path.join(pyDir, requirementsFileName);
         const requirements = await fs.readFile(requirementsFilePath, { encoding: 'ascii' });
-        const s3url = urljoin("http://eden.goph.me.s3.amazonaws.com/modules/", md5(requirements) + ".tar.gz");
-        console.log("Looking for " + s3url);
+        const provisionerurl = urljoin("https://example.com", secrets.CLIENT_ID, name, md5(requirements)); //TODO URL
 
         try {
-            await GetPythonLibrary(s3url, pyDir);
+            await GetPythonLibrary(provisionerurl, pyDir);
         } catch(err) {
-            if(err === 404){ //no archive, call the provisioner and wait for code 300
+            if(err === 404){ //no archive, call the provisioner
                 var token = await GetAuthToken(options.secrets)
                 .catch((err) => { Promise.reject("Error getting auth token: " + err) });
                 
@@ -56,7 +55,7 @@ module.exports.compile = async (options, cb) => {
                 }
             
                 const options = { 
-                    url: "https://example.com", //TODO
+                    url: provisionerurl,
                     json: requestData,
                     headers: {
                         Authorization: 'Bearer ' + token
@@ -65,9 +64,9 @@ module.exports.compile = async (options, cb) => {
                 var provRes = await PostToProvisioner(options)
                 .catch((err) => { Promise.reject("Error starting provisioner: " + err) });
 
-                return cb("Provisioning; \n" + provRes, null); //provisioning is ongoing, error out
+                return cb("Provisioning; \n" + provRes, null); //provisioning is started, error out
             }
-            return cb(err, null) //Something else went wrong with the s3 call
+            return cb(err, null) //Provisioning is ongoing or something else went wrong with the s3 call
         }
 
         return cb(null, RunPython) //Compiler done, pass the new webtask function back
@@ -95,12 +94,12 @@ function UnpackArchive(srcStream, dest) {
 
 function GetPythonLibrary(url, dest) {
     return new Promise ((resolve, reject) => {
-        var s3options = {
+        var options = {
             url: url
         }
 
         try {
-            rp(s3options).on('response', async (response) => {
+            rp(options).on('response', async (response) => {
                 if(response.statusCode === 200) return;
                 throw(response.statusCode);
             });
