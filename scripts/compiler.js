@@ -1,12 +1,3 @@
-`
-Get https://eden.goph.me/modules/<md5(webtaskUrl)>/<md5(Join(",", Sorted(Uniques(requirements))))>
-If 404 Call the EC2 Provisioner with webtaskUrl and the unique requirements.
-2.1. The provisioner will respond with the following scenarios
-2.1.1. 409 - Provisioning Ongoing.
-2.1.2. 304 - Provisioning Complete this points to the location installed on S3.
-2.1.3. 400 - Provisioning had failed and the following is the reason.
-If S3 Returns a 200 OK expand it in /tmp/ run the shell script and then execute the python code using the shell script.`
-
 const os = require('os');
 const path = require('path');
 const urljoin = require('url-join');
@@ -19,45 +10,58 @@ const pump = require('pump');
 const tar = require('tar-fs');
 const pythonShell = require('python-shell');
 
-const pyDirName = "_pyEnv";
-const archiveName = "env.zip";
 const pyHelperName = "helper.py";
 const userScriptName = "script.py"; //Make sure these two names are maintained by the cli
 const requirementsFileName = "requirements.txt";
 
 module.exports.compile = async (options, cb) => {
-    const pyDir = path.join(os.tmpdir(), options.meta.name);
-    const archivePath = path.join(pyDir, archiveName);
+    const name = options.meta.name;
+    const pyDir = path.join(os.tmpdir(), name);
 
     try { //set up directory and extract reqs and script from options.script
         await fs.ensureDir(pyDir);
         await fs.writeFile(path.join(pyDir, pyHelperName), pyFile);
-        var scriptStream = streamify.createReadStream(Buffer.from(options.script));
+        const scriptStream = streamify.createReadStream(Buffer.from(options.script));
         await UnpackArchive(scriptStream, pyDir);
     } catch(err) {
         console.log("Setup error: " + err);
     }
     
-    try{ 
-        var requirements = await fs.readFile(path.join(pyDir, requirementsFileName));
+    try{
+        const requirementsFilePath = path.join(pyDir, requirementsFileName);
+        const requirements = await fs.readFile(requirementsFilePath, { encoding: 'ascii' });
         const s3url = urljoin("https://eden.goph.me.s3.amazonaws.com/modules/", md5(requirements) + ".tar.gz");
         console.log("Looking for " + s3url);
 
         try {
             await GetPythonLibrary(s3url, pyDir);
         } catch(err) {
-            if(err === 404){//no archive, call the provisioner and wait for code 300
-                const provisionerurl = "google.com"; //TODO
-                var provRes = rp.post(provisionerurl,
-                    { formData: { file: fs.createReadStream(path.join(pyDir, requirementsFileName)) } }
-                );
-                //await UnpackArchive(res, pyDir);
-                return cb("Provisioning; " + provRes, null); //for now we do not wait for response, just error out
+            if(err === 404){ //no archive, call the provisioner and wait for code 300
+                var token = await GetAuthToken(options.secrets)
+                .catch((err) => { Promise.reject("Error getting auth token: " + err) });
+                
+                const requestData = {
+                    wtName: name,
+                    lang: 'python',
+                    requirements: requirements
+                }
+            
+                const options = { 
+                    url: "https://example.com", //TODO
+                    json: requestData,
+                    headers: {
+                        Authorization: 'Bearer ' + token
+                    }
+                }
+                var provRes = await PostToProvisioner(options)
+                .catch((err) => { Promise.reject("Error starting provisioner: " + err) });
+
+                return cb("Provisioning; \n" + provRes, null); //provisioning is ongoing, error out
             }
-            return cb(err, null)
+            return cb(err, null) //Something else went wrong with the s3 call
         }
 
-        return cb(null, RunPython) //Pass the new webtask function back
+        return cb(null, RunPython) //Compiler done, pass the new webtask function back
 
     } catch(err) {
         fs.remove(pyDir).catch((err) => reject("Error setting up python: " + err));
@@ -84,13 +88,13 @@ function GetPythonLibrary(url, dest) {
     return new Promise ((resolve, reject) => {
         var s3options = {
             url: url,
-            rejectUnauthorized: false
+            rejectUnauthorized: false //TODO fix certificates
         }
 
         try {
             rp(s3options).on('response', async (response) => {
                 if(response.statusCode === 200) return;
-                throw(response.statusCode); //something else went wrong with the s3 call
+                throw(response.statusCode);
             });
             UnpackArchive(req, dest).then(resolve());
         } catch(err) {
@@ -99,14 +103,44 @@ function GetPythonLibrary(url, dest) {
     });
 }
 
+function GetAuthToken(secrets) {
+    return new Promise ((resolve, reject) => {
+        var options = {
+            url: urljoin("https://", secrets.AUTH_DOMAIN, "/oauth/token"),
+            headers: { "content-type": "application/json" },
+            body: {
+                grant_type: "client_credentials",
+                client_id: secrets.CLIENT_ID,
+                client_secret: secrets.CLIENT_SECRET,
+                audience: secrets.API_ID
+            },
+            json: true
+        };
+
+        rp.post(options, (err, res, body) => {
+            if(err) return reject(err);
+            resolve(body);
+        });
+    });
+}
+
+function PostToProvisioner(options) {
+    return new Promise ((resolve, reject) => {
+        rp.post(options, (err, res, body) => {
+            if(err) return reject(err);
+            resolve(res);
+        });
+    });
+}
+
 //This is the function passed back as the new webtask from the compiler
 function RunPython(context, req, res) {
     return new Promise((resolve, reject) => {
         const pyDir = path.join(os.tmpdir(), context.meta.name);
         var options = { 
-            scriptPath: pyDir, //TODO Hash for user script name?
+            scriptPath: pyDir,
             pythonOptions: ["-W ignore"],
-            args: [pyDir, path.join(pyDir, userScriptName)] //TODO add ability to add system args
+            args: [pyDir, path.join(pyDir, userScriptName)] //TODO add ability to add system args and pipe in/out
         };
         var py = pythonShell.run(pyHelperName, options, (err) => {
             reject("Python error: " + err);
