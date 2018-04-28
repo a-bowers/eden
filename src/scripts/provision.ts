@@ -84,10 +84,10 @@ function zipModules(directory: string) {
 
 export async function provision(job: Job) {
     try {
+
         const req = job.metadata;
         const {requirements, directory, s3Path} = req;
         await ensureDir(directory);
-
 
         const stream = createWriteStream('tmp.tar.gz');
         try {
@@ -95,7 +95,11 @@ export async function provision(job: Job) {
             await installModules(directory, requirements);
             logger.info("Fetchinc complete starting to zip and upload");
             const arch = zipModules(directory);
-            const uploadPromise = uploadAsync(arch.stream);
+            const uploadPromise = uploadAsync({
+                Body: arch.stream,
+                Bucket: env('S3_BUCKET_NAME'),
+                Key: s3Path
+            });
             await arch.promise;
             logger.debug("Archival Complete");
             await uploadPromise;
@@ -110,7 +114,10 @@ export async function provision(job: Job) {
         return job.success();
 
     } catch(err) {
+
         logger.info("Unexpected Error while provisioning", err);
         return job.failed(err);
+
     }
+
 };

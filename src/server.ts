@@ -1,29 +1,51 @@
+import * as BodyParser from 'body-parser';
 import * as Express from 'express';
 import * as JWT from 'express-jwt';
 import * as jwksRsa from 'jwks-rsa';
+import createUserRouter from './controllers/User';
 import env from './env';
+import createLogger from './logger';
+import { Queue } from './queue/Queue';
 
-const app = Express();
+const logger = createLogger('server');
 
-const jwtAuthz = JWT({
-    // Dynamically provide a signing key
-    // based on the kid in the header and
-    // the signing keys provided by the JWKS endpoint.
-    secret: jwksRsa.expressJwtSecret({
-        cache: true,
-        jwksRequestsPerMinute: 5,
-        jwksUri: `https://${env('AUTH0_DOMAIN')}/.well-known/jwks.json`,
-        rateLimit: true,
-    }),
+export default async function createServer() {
+    logger.info(`Creating an application on server`);
 
-    algorithms: ['RS256'],
-    // Validate the audience and the issuer.
-    audience: env('AUTH0_AUDIENCE'),
-    issuer: `https://${env('AUTH0_DOMAIN')}`,
-});
+    const PORT = parseInt(env('PORT'), 10);
+    const HOST = env('HOSTNAME');
+    const AUTH0_DOMAIN = env('AUTH0_DOMAIN');
+    const AUTH0_AUDIENCE = env('AUTH0_AUDIENCE');
 
-async function initialize() {
-    // const publisher = await createPublisher();
-    // app.use("/api", jwtAuthz, createRoutes(publisher));
-    app.listen(process.env.PORT || 4000);
+    const app: Express.Express = Express();
+    const jobs = await Queue.create();
+
+    const jwtAuthz = JWT({
+        algorithms: ['RS256'],
+
+        // Validate the audience and the issuer.
+        audience: AUTH0_AUDIENCE,
+        issuer: `https://${AUTH0_DOMAIN}`,
+
+        // Dynamically provide a signing key
+        // based on the kid in the header and
+        // the signing keys provided by the JWKS endpoint.
+        secret: jwksRsa.expressJwtSecret({
+            cache: true,
+            jwksRequestsPerMinute: 5,
+            jwksUri: `https://${AUTH0_DOMAIN}/.well-known/jwks.json`,
+            rateLimit: true,
+        })
+    });
+
+    app.use(BodyParser.json());
+    app.use('/provision', jwtAuthz, createUserRouter(jobs));
+
+    logger.info(`Express application trying to listen on ${HOST}:${PORT}`);
+
+    app.listen(PORT, HOST, () => {
+        logger.info(`Express application listening on ${HOST}:${PORT}`);
+    });
+
+    return app;
 }
