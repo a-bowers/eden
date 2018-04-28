@@ -21,8 +21,17 @@ module.exports.compile = async (options, cb) => {
     try { //set up directory and extract reqs and script from options.script
         await fs.ensureDir(pyDir);
         await fs.writeFile(path.join(pyDir, pyHelperName), pyFile);
-        const scriptStream = streamify.createReadStream(Buffer.from(options.script));
-        await UnpackArchive(scriptStream, pyDir);
+        const buffer = Buffer.from(options.script);
+        if(buffer.toString('hex', 0, 2) === "1f8b") {
+            const scriptStream = streamify.createReadStream(buffer);
+            await UnpackArchive(scriptStream, pyDir);
+        } else {
+            //will have issues if the first multiline is not a requirements list (if not included)
+            const regex = /"""\n?([\s\S]*?)"""|'''\n?([\s\S]*)'''/;
+            var match = regex.exec(buffer.toString('ascii'));
+            await fs.writeFile(path.join(pyDir, requirementsFileName), match[1] === "" ? match[2] : match [1]);
+            await fs.writeFile(path.join(pyDir, userScriptName), match.input.substring(match.index + match[0].length));
+        }
     } catch(err) {
         console.log("Setup error: " + err);
     }
@@ -30,7 +39,7 @@ module.exports.compile = async (options, cb) => {
     try{
         const requirementsFilePath = path.join(pyDir, requirementsFileName);
         const requirements = await fs.readFile(requirementsFilePath, { encoding: 'ascii' });
-        const s3url = urljoin("https://eden.goph.me.s3.amazonaws.com/modules/", md5(requirements) + ".tar.gz");
+        const s3url = urljoin("http://eden.goph.me.s3.amazonaws.com/modules/", md5(requirements) + ".tar.gz");
         console.log("Looking for " + s3url);
 
         try {
@@ -87,8 +96,7 @@ function UnpackArchive(srcStream, dest) {
 function GetPythonLibrary(url, dest) {
     return new Promise ((resolve, reject) => {
         var s3options = {
-            url: url,
-            rejectUnauthorized: false //TODO fix certificates
+            url: url
         }
 
         try {
@@ -147,7 +155,7 @@ function RunPython(context, req, res) {
         });
         py.on('message', (message) => { console.log(message) });
         py.on('error', (err) => { reject("Python error: " + err); });
-        py.on('close', resolve);
+        py.on('close', resolve); //return python response
     });
 }
 
