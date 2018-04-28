@@ -53,7 +53,6 @@
     "python-shell": "^0.5.0",
     "request": "^2.85.0",
     "request-promise-native": "^1.0.5",
-    "routing-controllers": "^0.7.7",
     "streamifier": "^0.1.1",
     "tar-fs": "^1.16.0",
     "url-join": "^4.0.0",
