@@ -4,7 +4,7 @@ import * as Debug from 'debug';
  * Debug powered Magic logger.
  */
 if (!module.parent) {
-  throw new Error('You are not supposed to run this from as script');
+  throw new Error('You are not supposed to run this as script');
 }
 
 const filename = module.parent.filename.replace(process.cwd(), '');
