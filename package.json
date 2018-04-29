@@ -63,7 +63,6 @@
     "streamifier": "^0.1.1",
     "tar-fs": "^1.16.0",
     "url-join": "^4.0.0",
-    "webtask-simple-python": "^1.0.1",
     "yargs": "^11.0.0"
   },
   "devDependencies": {

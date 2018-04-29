@@ -15,9 +15,8 @@ CREATE TABLE modules (
 );
 
 CREATE TABLE modules_jobs(
-    id BIGSERIAL PRIMARY KEY,
-    job_id BIGSERIAL FOREIGN KEY pg_queue_simple_jobs(id) ON DELETE CASCADE,
-    module_id BIGSERIAL FOREIGN KEY REFERENCES modules(id)  ON DELETE CASCADE
+    id          BIGSERIAL PRIMARY KEY,
+    module_id   BIGSERIAL FOREIGN KEY REFERENCES modules(id)  ON DELETE CASCADE
 );
 
 
