@@ -36,7 +36,7 @@ module.exports.compile = async (options, cb) => {
     } catch(err) {
         console.log("Setup error: " + err);
     }
-    
+
     try{
         const requirementsFilePath = path.join(pyDir, requirementsFileName);
         const requirements = await fs.readFile(requirementsFilePath, { encoding: 'ascii' });
@@ -48,14 +48,14 @@ module.exports.compile = async (options, cb) => {
             if(err === 404){ //no archive, call the provisioner
                 var token = await GetAuthToken(options.secrets)
                 .catch((err) => { Promise.reject("Error getting auth token: " + err) });
-                
+
                 const requestData = {
                     wtName: name,
                     lang: 'python',
                     requirements: requirements
                 }
-            
-                const options = { 
+
+                const options = {
                     url: provisionerurl,
                     json: requestData,
                     headers: {
@@ -145,7 +145,7 @@ function PostToProvisioner(options) {
 function RunPython(context, req, res) {
     const port = 4589;
     const pyDir = path.join(os.tmpdir(), context.meta.name);
-    var options = { 
+    var options = {
         scriptPath: pyDir,
         pythonOptions: ["-W ignore"],
         args: [pyDir, port, path.join(pyDir, userScriptName), context.query.main]

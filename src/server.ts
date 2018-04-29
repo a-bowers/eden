@@ -2,10 +2,10 @@ import * as BodyParser from 'body-parser';
 import * as Express from 'express';
 import * as JWT from 'express-jwt';
 import * as jwksRsa from 'jwks-rsa';
-import createUserRouter from './controllers/User';
 import env from './env';
 import createLogger from './logger';
 import { Queue } from './queue/Queue';
+import createModulesRouter from './routers/createModulesRouter';
 
 const logger = createLogger('server');
 
@@ -39,7 +39,7 @@ export default async function createServer() {
     });
 
     app.use(BodyParser.json());
-    app.use('/provision', jwtAuthz, createUserRouter(jobs));
+    app.use('/provision', jwtAuthz, createModulesRouter(jobs));
 
     logger.info(`Express application trying to listen on ${HOST}:${PORT}`);
 
