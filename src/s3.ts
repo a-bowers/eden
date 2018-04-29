@@ -3,6 +3,6 @@ import env from './env';
 
 export default new S3({
     accessKeyId: env('AWS_ACCESS_KEY_ID'),
-    region: 'us-west-2',
+    region: env('AWS_REGION'),
     secretAccessKey: env('AWS_ACCESS_KEY')
 });
