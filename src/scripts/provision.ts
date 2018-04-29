@@ -1,6 +1,5 @@
 import * as archiver from 'archiver';
 // tslint:disable-next-line:no-submodule-imports
-import * as S3 from 'aws-sdk/clients/s3';
 import { exec } from 'child_process';
 import * as chokidar from 'chokidar';
 import { createWriteStream, writeFile } from 'fs';
@@ -10,44 +9,34 @@ import { promisify } from 'util';
 import env from '../env';
 import createLogger from '../logger';
 import { Job } from '../queue/Job';
+import s3 from '../s3';
+import { loadLanguage } from './language';
 
 const logger = createLogger('provisioner');
 const execAsync = promisify(exec);
 const writeFileAsync = promisify(writeFile);
-const awsS3 = new S3({
-    accessKeyId: env('AWS_ACCESS_KEY_ID'),
-    region: 'us-west-2',
-    secretAccessKey: env('AWS_ACCESS_KEY')
-});
 
-const uploadAsync = promisify(awsS3.upload.bind(awsS3));
+const uploadAsync = promisify(s3.upload.bind(s3));
 
-async function installModules(directory: string, requirements: string) {
-    logger.info("Setting up virtual environment");
-    const responseFromSetup = await execAsync(`virtualenv --no-site-packages --always-copy ${directory}`, {
-        cwd: directory
-    });
-    logger.debug("Setting up module finished with", responseFromSetup);
-    logger.info("Environment set up");
+async function installModules(language: string, directory: string, dependencyFile: string) {
+    const lang = loadLanguage(language);
 
-    const requirementsFilePath = path.join(directory, 'requirements.txt');
-    await writeFileAsync(requirementsFilePath, requirements, {
-        encoding: 'ascii'
-    })
+    if (lang.setup) {
+        logger.info("Setting up environment");
+        const responseFromSetup = await lang.setup(directory, dependencyFile);
+        logger.debug("Setting up environment finished with", responseFromSetup);
+        logger.info("Environment set up");
+    }
 
     logger.info("Starting to install modules");
-    logger.debug("requirements.txt ->", requirements);
-    const responseFromInstall =  await execAsync("pip install -r ../requirements.txt", {
-        cwd: directory + "/Scripts"
-    });
-
+    logger.debug("dependencyFile ->", dependencyFile);
+    const responseFromInstall =  await lang.install(directory, dependencyFile);
     logger.debug("installing finished", responseFromInstall);
     logger.info("Modules successfully installed");
 }
 
-function zipModules(directory: string) {
-    directory = path.join(directory, 'Lib/site-packages');
-
+async function zipModules(language: string, directory: string, dependencyFile: string) {
+    const lang = loadLanguage(language);
     const arch = archiver('tar', {
         zlib: {
             level: 6
@@ -67,14 +56,7 @@ function zipModules(directory: string) {
     });
 
     // Improve this
-    arch.glob('**', {
-        cwd: directory,
-        ignore: [
-            'wheel**',
-            'pip**',
-            'setuptools**',
-        ]
-    });
+    arch.glob('**', await lang.getGlobParams(directory, dependencyFile));
 
     return {
         promise,
@@ -86,15 +68,15 @@ export async function provision(job: Job) {
     try {
 
         const req = job.metadata;
-        const {requirements, directory, s3Path} = req;
+        const {dependencyFile, directory, s3Path, language} = req;
         await ensureDir(directory);
 
         const stream = createWriteStream('tmp.tar.gz');
         try {
             logger.info("Fetching modules");
-            await installModules(directory, requirements);
+            await installModules(language, directory, dependencyFile);
             logger.info("Fetchinc complete starting to zip and upload");
-            const arch = zipModules(directory);
+            const arch = await zipModules(language, directory, dependencyFile);
             const uploadPromise = uploadAsync({
                 Body: arch.stream,
                 Bucket: env('S3_BUCKET_NAME'),
