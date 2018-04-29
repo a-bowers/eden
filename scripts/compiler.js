@@ -140,22 +140,19 @@ function PostToProvisioner(options) {
     });
 }
 
-//This is the function passed back as the new webtask from the compiler
-function RunPython(context, req, res) {
-    return new Promise((resolve, reject) => {
-        const pyDir = path.join(os.tmpdir(), context.meta.name);
-        var options = { 
-            scriptPath: pyDir,
-            pythonOptions: ["-W ignore"],
-            args: [pyDir, path.join(pyDir, userScriptName)] //TODO add ability to add system args and pipe in/out
-        };
-        var py = pythonShell.run(pyHelperName, options, (err) => {
-            reject("Python error: " + err);
-        });
-        py.on('message', (message) => { console.log(message) });
-        py.on('error', (err) => { reject("Python error: " + err); });
-        py.on('close', resolve); //return python response
+//This is the new webtask fucntion passed back from the compiler
+function RunPython(context, cb) {
+    const pyDir = path.join(os.tmpdir(), context.meta.name);
+    var options = { 
+        scriptPath: pyDir,
+        pythonOptions: ["-W ignore"],
+        args: [pyDir, path.join(pyDir, userScriptName)] //TODO add ability to add args
+    };
+    var py = pythonShell.run(pyHelperName, options, (err, results) => {
+        if(err) return cb("Python error: " + err);
+        cb(null, results);
     });
+    py.on('message', (message) => { console.log(message) });
 }
 
 const pyFile = //TODO call correct user script function
