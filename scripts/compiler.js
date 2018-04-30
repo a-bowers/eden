@@ -1,5 +1,6 @@
 const os = require('os');
 const path = require('path');
+const net = require('net');
 const urljoin = require('url-join');
 const md5 = require('md5');
 const rp = require('request');
@@ -141,27 +142,52 @@ function PostToProvisioner(options) {
 }
 
 //This is the new webtask fucntion passed back from the compiler
-function RunPython(context, cb) {
+function RunPython(context, req, res) {
+    const port = 4589;
     const pyDir = path.join(os.tmpdir(), context.meta.name);
     var options = {
         scriptPath: pyDir,
         pythonOptions: ["-W ignore"],
-        args: [pyDir, path.join(pyDir, userScriptName)] //TODO add ability to add args
+        args: [pyDir, port, path.join(pyDir, userScriptName), context.query.main]
     };
     var py = pythonShell.run(pyHelperName, options, (err, results) => {
-        if(err) return cb("Python error: " + err);
-        cb(null, results);
+        if(err) {
+            res.writeHead(444, "Python error");
+            res.end(err);
+        } else {
+            res.writeHead(200, "Webtask complete");
+            res.end(results);
+        }
     });
     py.on('message', (message) => { console.log(message) });
+    const sock = net.connect(port);
+    req.pipe(sock);
+    sock.pipe(res);
 }
 
-const pyFile = //TODO call correct user script function
-`import sys
+const pyFile = `
+import sys
 import imp
+import socket
 
-def RunPython(dir, scriptPath):
+def RunPython(dir, port, scriptPath, mainFunc):
     sys.path.append(dir)
     module = imp.load_source("script", scriptPath)
-    module.Main()
 
-RunPython(sys.argv[1], sys.argv[2])`;
+    sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+    sock.bind(('127.0.0.1', port))
+    sock.listen(1)
+    conn, addr = sock.accept()
+    req = ""
+    try:
+        while True:
+            data = conn.recv(4096)
+            if not data:
+                break
+            req += data
+        res = getattr(module, mainFunc)(req) if mainFunc else module.Main(req)
+        conn.sendall(res)
+    finally:
+        sock.close()
+
+RunPython(sys.argv[1], int(sys.argv[2]), sys.argv[3], sys.argv[4])`;
