@@ -70,9 +70,9 @@ export default function getJobModel(db: Database | Transaction = instance) {
             return new Job(result.rows[0]);
         }
 
-        public id!: number;
-        public type!: string;
-        public metadata!: any;
+        public readonly id!: number;
+        public readonly type!: string;
+        public readonly metadata!: any;
 
         public status!: JOB_STATUSES;
         public retriesRemaining!: number;
