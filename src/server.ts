@@ -23,7 +23,7 @@ export default async function createServer() {
     await connect();
 
     const app: Express.Express = Express();
-    const jobs = new Queue(5);
+    const jobs = new Queue(env('MAX_WORKERS'));
 
     const jwtAuthz = JWT({
         algorithms: ['RS256'],

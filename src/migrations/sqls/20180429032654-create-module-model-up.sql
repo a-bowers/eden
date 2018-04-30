@@ -6,17 +6,14 @@ CREATE TYPE modules_status as ENUM(
 
 CREATE TABLE modules (
     id                      BIGSERIAL PRIMARY KEY,
-    wtName                  VARCHAR(255) NOT NULL,
-    clientId                VARCHAR(255) NOT NULL,
-    modules_status          NOT NULL,
-    dependencyFile          TEXT NOT NULL,
-    dependencyFileHash      VARCHAR(255) NOT NULL
-    lang                    VARCHAR(255) NOT NULL
+    wt_name                 VARCHAR(255) NOT NULL,
+    client_id               VARCHAR(255) NOT NULL,
+    modules_status          NOT NULL DEFAULT 'provisioning',
+    dependency_file_hash    VARCHAR(255) NOT NULL DEFAULT '0000000000'
 );
 
 CREATE TABLE modules_jobs(
     id          BIGSERIAL PRIMARY KEY,
-    module_id   BIGSERIAL FOREIGN KEY REFERENCES modules(id)  ON DELETE CASCADE
+    module_id   BIGSERIAL FOREIGN KEY REFERENCES modules(id) ON DELETE CASCADE
+    job_id      BIGSERIAL FOREIGN KEY REFERENCES job(id) ON DELETE CASCADE
 );
-
-
