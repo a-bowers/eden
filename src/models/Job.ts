@@ -78,7 +78,7 @@ export default function getJobModel(db: Database | Transaction = instance) {
         public retriesRemaining!: number;
         public runAfter!: Date;
 
-        protected constructor(row: any) {
+        private constructor(row: any) {
             Object.assign(this, dbToProp(row, overridesMap));
         }
 
