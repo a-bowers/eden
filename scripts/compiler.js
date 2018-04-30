@@ -37,45 +37,37 @@ module.exports.compile = async (options, cb) => {
         console.log("Setup error: " + err);
     }
 
-    try{
+    try {
         const requirementsFilePath = path.join(pyDir, requirementsFileName);
         const requirements = await fs.readFile(requirementsFilePath, { encoding: 'ascii' });
-        const provisionerurl = urljoin("https://example.com", secrets.CLIENT_ID, name, md5(requirements)); //TODO URL
+        const provisionerurl = urljoin("https://example.com", secrets.CLIENT_ID, name); //TODO URL
 
-        try {
-            await GetPythonLibrary(provisionerurl, pyDir);
-        } catch(err) {
-            if(err === 404){ //no archive, call the provisioner
-                var token = await GetAuthToken(options.secrets)
-                .catch((err) => { Promise.reject("Error getting auth token: " + err) });
+        var token = await GetAuthToken(options.secrets)
+        .catch((err) => { Promise.reject("Error getting auth token: " + err) });
 
-                const requestData = {
-                    wtName: name,
-                    lang: 'python',
-                    requirements: requirements
-                }
-
-                const options = {
-                    url: provisionerurl,
-                    json: requestData,
-                    headers: {
-                        Authorization: 'Bearer ' + token
-                    }
-                }
-                var provRes = await PostToProvisioner(options)
-                .catch((err) => { Promise.reject("Error starting provisioner: " + err) });
-
-                return cb("Provisioning; \n" + provRes, null); //provisioning is started, error out
-            }
-            return cb(err, null) //Provisioning is ongoing or something else went wrong with the s3 call
+        const requestData = {
+            wtName: name,
+            language: 'python',
+            dependencyFile: requirements
         }
 
-        return cb(null, RunPython) //Compiler done, pass the new webtask function back
-
+        const options = {
+            url: provisionerurl,
+            json: requestData,
+            headers: {
+                Authorization: 'Bearer ' + token
+            }
+        }
+        const provRes = await GetPythonLibrary(options, pyDir)
+        .catch((err) => {
+            if(provRes.statusCode && provRes.statusCode === 404) Promise.reject("Provisioning in progress.");
+            else Promise.reject("Error starting provisioner: " + err)
+        });;
     } catch(err) {
-        fs.remove(pyDir).catch((err) => reject("Error setting up python: " + err));
-        console.log("Error: " + err);
+        return cb(err, null) //Provisioning is ongoing or something else went wrong with the s3 call
     }
+
+    return cb(null, RunPython) //Compiler done, pass the new webtask function back
 };
 
 function UnpackArchive(srcStream, dest) {
@@ -93,18 +85,17 @@ function UnpackArchive(srcStream, dest) {
     });
 }
 
-function GetPythonLibrary(url, dest) {
+async function GetPythonLibrary(options, dest) {
     return new Promise ((resolve, reject) => {
-        var options = {
-            url: url
-        }
-
         try {
-            rp(options).on('response', async (response) => {
-                if(response.statusCode === 200) return;
-                throw(response.statusCode);
+            rp.post(options, (err, res, body) => {
+                if(err) return reject(err);
+                if(res.statusCode === 200) {
+                    await UnpackArchive(req, dest).then(resolve());
+                    return resolve(res);
+                }
+                return reject(res);
             });
-            UnpackArchive(req, dest).then(resolve());
         } catch(err) {
             reject(err);
         }
@@ -128,15 +119,6 @@ function GetAuthToken(secrets) {
         rp.post(options, (err, res, body) => {
             if(err) return reject(err);
             resolve(body);
-        });
-    });
-}
-
-function PostToProvisioner(options) {
-    return new Promise ((resolve, reject) => {
-        rp.post(options, (err, res, body) => {
-            if(err) return reject(err);
-            resolve(res);
         });
     });
 }
