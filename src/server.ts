@@ -7,7 +7,7 @@ import env from './env';
 import {HttpError} from './error/HttpError';
 import createLogger from './logger';
 import { Queue } from './queue/Queue';
-import createModulesRouter from './routers/createModulesRouter';
+import router from './routers/modules';
 
 const logger = createLogger('server');
 
@@ -23,7 +23,6 @@ export default async function createServer() {
     await connect();
 
     const app: Express.Express = Express();
-    const jobs = new Queue(env('MAX_WORKERS'));
 
     const jwtAuthz = JWT({
         algorithms: ['RS256'],
@@ -44,7 +43,7 @@ export default async function createServer() {
     });
 
     app.use(BodyParser.json());
-    app.use('/provision', jwtAuthz, createModulesRouter(jobs));
+    app.use('/provision', jwtAuthz, router);
 
     app.use((err: Error, req: Express.Request, res: Express.Response, next: Express.NextFunction) => {
         if (err instanceof HttpError) {
