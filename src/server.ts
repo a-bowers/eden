@@ -2,7 +2,9 @@ import * as BodyParser from 'body-parser';
 import * as Express from 'express';
 import * as JWT from 'express-jwt';
 import * as jwksRsa from 'jwks-rsa';
+import { connect } from './db/index';
 import env from './env';
+import {HttpError} from './error/HttpError';
 import createLogger from './logger';
 import { Queue } from './queue/Queue';
 import createModulesRouter from './routers/createModulesRouter';
@@ -17,8 +19,11 @@ export default async function createServer() {
     const AUTH0_DOMAIN = env('AUTH0_DOMAIN');
     const AUTH0_AUDIENCE = env('AUTH0_AUDIENCE');
 
+    // Connect to database / kinda sanity check
+    await connect();
+
     const app: Express.Express = Express();
-    const jobs = await Queue.create();
+    const jobs = new Queue(5);
 
     const jwtAuthz = JWT({
         algorithms: ['RS256'],
@@ -40,6 +45,17 @@ export default async function createServer() {
 
     app.use(BodyParser.json());
     app.use('/provision', jwtAuthz, createModulesRouter(jobs));
+
+    app.use((err: Error, req: Express.Request, res: Express.Response, next: Express.NextFunction) => {
+        if (err instanceof HttpError) {
+            const httpError = err as HttpError;
+            res.status(httpError.code).json(httpError);
+        }
+        res.status(500).json({
+            code: 500,
+            message: 'Internal Server Error'
+        });
+    });
 
     logger.info(`Express application trying to listen on ${HOST}:${PORT}`);
 

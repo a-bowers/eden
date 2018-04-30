@@ -3,46 +3,34 @@ import { join } from 'path';
 import * as pg from 'pg';
 import { promisify } from 'util';
 import env from '../env';
+import { Transaction } from './Transaction';
 
 const readDirAsync = promisify(readdir);
 
-class Database {
-    public static async connect(modelsPath?: string, dbUrl: string = env('DATABASE_URL')) {
-        const pool = await Database.getPool(dbUrl);
-        const listener = await Database.getClient(dbUrl);
-        return new Database(pool, listener, modelsPath);
-    }
+export class Database {
+    public readonly models : {[key: string]: any}= {};
+    public readonly listener: pg.Client;
+    public readonly pool: pg.Pool;
 
-    private static async getPool(dbUrl: string) {
-        const pool = new pg.Pool({
+    constructor(dbUrl: string = env('DATABASE_URL')) {
+        this.listener = new pg.Client(dbUrl);
+        this.pool = new pg.Pool({
             connectionString: dbUrl
         });
-        await pool.connect();
-        return pool;
     }
 
-    private static async getClient(dbUrl: string) {
-        const client = new pg.Client(dbUrl);
-        await client.connect();
-        return client;
+    public async connect() {
+        await this.listener.connect();
     }
 
-    public readonly models : {[key: string]: any}= {};
-
-    constructor(
-        private readonly pool: pg.Pool,
-        private readonly listener: pg.Client,
-        modelsPath?: string
-    ) {
-        if (modelsPath) {
-            this.loadModels(modelsPath);
-        }
+    public async query(statement: string, params: any []) {
+        return this.pool.query(statement, params);
     }
 
-    public async loadModels(dir: string) {
-        const modules = await readDirAsync(dir);
-        for (const moduleFileName of modules) {
-            this.models[moduleFileName] = require(join(dir, moduleFileName))(this.pool);
-        }
+    // Gets a transaction
+    public async transaction() {
+        const client = await this.pool.connect();
+        const transaction = new Transaction(client);
+        return transaction;
     }
 }

@@ -1,5 +1,5 @@
 CREATE TYPE pg_queue_simple_jobstatus as ENUM(
-    'waiting', 'busy', 'crashed', 'failed', 'completed'
+    'waiting', 'busy', 'failed', 'completed'
 );
 
 CREATE TABLE pg_queue_simple_jobs (
@@ -7,6 +7,10 @@ CREATE TABLE pg_queue_simple_jobs (
     type                                VARCHAR(128) NOT NULL,
     status pg_queue_simple_jobstatus    DEFAULT 'waiting',
     retries_remaining                   SMALLINT DEFAULT 5,
+    run_after_timestamp                 TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    started_at                          TIMESTAMP,
+    updated_at                          TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    submitted_at                        TIMESTAMP DEFAULT CURRENT_TIMESTAMP
     metadata                            JSONB NOT NULL DEFAULT '{}'
 );
 
@@ -15,7 +19,7 @@ CREATE FUNCTION pg_queue_simple_notify() RETURNS trigger AS $$
         BEGIN
             PERFORM pg_notify(
                 'pg_queue_simple_trigger_created_' || NEW.type,
-                'pg_queue_simple_trigger_created_' || New.type || ',' || NEW.jobid
+                'pg_queue_simple_trigger_created_' || New.type || ',' || NEW.id
             );
         RETURN new;
     END;
