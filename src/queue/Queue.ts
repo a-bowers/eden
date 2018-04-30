@@ -2,10 +2,11 @@ import { EventEmitter } from 'events';
 import ms = require('ms');
 import * as pg from 'pg';
 import { instance as db } from '../db';
+import { Database } from '../db/Database';
+import { Transaction } from '../db/Transaction';
 import createLogger from '../logger';
-import createJobClass from '../models/Job';
+import Job from '../models/Job';
 
-const Job = createJobClass();
 const logger = createLogger('queue');
 export type JobHandler = (metadata: any) => Promise<boolean>;
 
@@ -24,8 +25,8 @@ export class Queue {
         );
     }
 
-    public async publish(type: string, metadata: any) {
-        return Job.create(type, metadata);
+    public async publish(type: string, metadata: any, tOrDb: Transaction | Database = db) {
+        return Job.create(type, metadata, tOrDb);
     }
 
     public job(type: string, handler: JobHandler) {
@@ -60,8 +61,7 @@ export class Queue {
             const transaction = await db.transaction();
 
             try {
-                const job = await Job.withTransaction(transaction)
-                    .getByType(type);
+                const job = await Job.getByType(type, transaction);
 
                 if (!job) {
                     break;
@@ -81,7 +81,7 @@ export class Queue {
                     }
                 }
 
-                await job.update();
+                await job.update(transaction);
                 await transaction.commit();
             } catch (e) {
                 await transaction.rollback();
