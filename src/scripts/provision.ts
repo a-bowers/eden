@@ -3,17 +3,20 @@ import { exec } from 'child_process';
 import * as chokidar from 'chokidar';
 import { createWriteStream, writeFile } from 'fs';
 import { ensureDir } from 'fs-extra';
+import { tmpdir } from 'os';
 import * as path from 'path';
+import * as request from 'request-promise';
 import { promisify } from 'util';
 import env from '../env';
 import createLogger from '../logger';
-import s3 from '../s3';
 import { loadLanguage } from './language';
 
 const logger = createLogger('provisioner');
 const execAsync = promisify(exec);
 const writeFileAsync = promisify(writeFile);
 const uploadAsync = promisify(s3.upload.bind(s3));
+
+s3.upload()
 
 async function installModules(
     language: string,
@@ -70,12 +73,13 @@ async function zipModules(
 }
 
 export async function provision(metadata: any) {
-    const { dependencyFile, directory, s3Path, language } = metadata;
-    await ensureDir(directory);
+    const { dependencyFile, s3Url, envUrl, language } = metadata;
+
+    await ensureDir(envUrl);
 
     try {
         logger.info("Fetching modules");
-        await installModules(language, directory, dependencyFile);
+        await installModules(language, envUrl, dependencyFile);
     } catch (err) {
         logger.error("Failed to install modules", err);
         return false;
@@ -83,12 +87,11 @@ export async function provision(metadata: any) {
 
     try {
         logger.info("Fetchinc complete starting to zip and upload");
-        const arch = await zipModules(language, directory, dependencyFile);
-        const uploadPromise = uploadAsync({
-            Body: arch.stream,
-            Bucket: env('S3_BUCKET_NAME'),
-            Key: s3Path
+        const arch = await zipModules(language, envUrl, dependencyFile);
+        const uploadPromise = request.put(s3Url, {
+            method: 'PUT'
         });
+        arch.stream.pipe(uploadPromise);
         await arch.promise;
         logger.debug("Archival Complete");
         await uploadPromise;
