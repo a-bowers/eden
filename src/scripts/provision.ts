@@ -14,9 +14,6 @@ import { loadLanguage } from './language';
 const logger = createLogger('provisioner');
 const execAsync = promisify(exec);
 const writeFileAsync = promisify(writeFile);
-const uploadAsync = promisify(s3.upload.bind(s3));
-
-s3.upload()
 
 async function installModules(
     language: string,
