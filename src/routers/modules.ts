@@ -3,6 +3,7 @@ import { NextFunction, Request, Response, Router } from 'express';
 import * as os from 'os';
 import * as path from 'path';
 import { instance as db } from '../db';
+import env from '../env';
 import { HttpError } from '../error/HttpError';
 import { Module } from '../models/Module';
 import queue from '../queue';
@@ -46,27 +47,43 @@ async function provisionModule(req: Request, res: Response, next: NextFunction) 
 
     const transaction = await db.transaction();
 
-    const mod = await Module.getByClientAndName(clientId, wtName, transaction);
+    let mod = await Module.getByClientAndName(clientId, wtName, transaction);
 
     if (!mod) {
-        // Strat provisioning;
+        // Start provisioning;
+        mod = await Module.create(clientId, wtName, transaction);
         return;
     }
-
-    if (mod.dependencyFileHash === hashedRequirements) {
-        // Redirect to S3 with provisioned url
-        return;
-    }
-
 
     const directory = path.join(os.tmpdir(), clientId, body.wtName);
-    const s3Path = path.join(clientId, body.wtName);
+    const s3Path = path.join(env('S3_PATH_PREFIX'), clientId, body.wtName);
+    const s3Options = {
+        Bucket: env('AWS_S3_BUCKET'),
+        Key: s3Path,
+    };
+
+    if (mod.dependencyFileHash === hashedRequirements) {
+        // If this is not working please refer to
+        // https://stackoverflow.com/questions/38831829/nodejs-aws-sdk-s3-generate-presigned-url
+        const url = s3.getSignedUrl('getObject', {
+            Expires: env('AWS_GET_EXPIRY'),
+            ...s3Options
+        });
+
+        return res.redirect(url);
+    }
+
+    // We might want a better way to do this
+    const putUrl = s3.getSignedUrl('putObject', {
+        Expires: env('AWS_POST_EXPIRY'),
+        ...s3Options
+    });
 
     const jobId = await queue.publish('provision', {
         dependencyFile,
-        directory,
+        envUrl: directory,
         language,
-        s3Path,
+        s3Url: putUrl,
     });
 
     res.status(201).end('Created');
