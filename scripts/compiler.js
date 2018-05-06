@@ -15,6 +15,7 @@ const pythonShell = require('python-shell');
 const port = 3336;
 const mainFunctionName = "Main";
 const pyHelperName = "helper.py";
+const pyContextName = "wtcontext.py";
 const userScriptName = "script.py"; //Make sure these two bottom names are maintained by the cli
 const requirementsFileName = "requirements.txt";
 
@@ -25,7 +26,9 @@ module.exports.compile = async (options, cb) => {
 
     try { //set up directory and extract requirements, script, and main function name from options.script
         await fs.ensureDir(pyDir);
-        await fs.writeFile(path.join(pyDir, pyHelperName), pyFile);
+        await fs.writeFile(path.join(pyDir, pyHelperName), pyHelper);
+        await fs.writeFile(path.join(pyDir, pyContextName), pyContext);
+        await fs.writeFile(path.join(pyDir, "webtaskContext.json"), JSON.stringify(options.context));
 
         const buffer = Buffer.from(options.script);
         if(buffer.toString('hex', 0, 2) === "1f8b") {
@@ -149,7 +152,7 @@ function StartPythonServer(name) {
     });
 }
 
-const pyFile = `
+const pyHelper = `
 import sys
 import imp
 from wsgiref.simple_server import make_server # if we really need it, use bjoern
@@ -184,6 +187,15 @@ def StartServer(port):
     httpd.serve_forever()
 
 StartServer(port)`;
+
+const pyContext = `
+import os
+import json
+
+context = None
+
+with open(os.path.join(os.path.dirname(os.path.abspath(__file__)), 'webtaskContext.json')) as f:
+    context = json.load(f)`;
 
 //This is the new webtask function passed back from the compiler
 function RunPython(context, req, res) {
