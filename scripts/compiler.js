@@ -13,7 +13,6 @@ const tar = require('tar-fs');
 const pythonShell = require('python-shell');
 
 const port = 3336;
-const code = uuid();
 const mainFunctionName = "Main";
 const pyHelperName = "helper.py";
 const userScriptName = "script.py"; //Make sure these two bottom names are maintained by the cli
@@ -26,6 +25,8 @@ module.exports.compile = async (options, cb) => {
 
     try { //set up directory and extract requirements, script, and main function name from options.script
         await fs.ensureDir(pyDir);
+        await fs.writeFile(path.join(pyDir, pyHelperName), pyFile);
+
         const buffer = Buffer.from(options.script);
         if(buffer.toString('hex', 0, 2) === "1f8b") {
             const scriptStream = streamify.createReadStream(buffer);
@@ -41,25 +42,6 @@ module.exports.compile = async (options, cb) => {
         if(options.meta.main)
             mainFunctionName = options.meta.main;
         console.log("Main function is " + mainFunctionName);
-        const argRegex = new RegExp("(?:def +" + mainFunctionName + " *\\()([\\s\\S]*?)(?:\\):)");
-        const argCount = regex.exec(buffer.toString('ascii'))[1].split(',').length; //TODO doesn't count comments or defaults
-        console.log("Found " + argCount + " arguments");
-        switch(argCount) {
-            case 1: //callback
-                await fs.writeFile(path.join(pyDir, pyHelperName), pyFileCallback);
-                webtaskFunction = RunPythonCallback;
-                break;
-            case 2: //with context
-                await fs.writeFile(path.join(pyDir, pyHelperName), pyFileContext);
-                webtaskFunction = RunPythonContext;
-                break;
-            case 3: //full control
-                await fs.writeFile(path.join(pyDir, pyHelperName), pyFileFull);
-                webtaskFunction = RunPythonFull;
-                break;
-            default:
-                throw "Improper webtask main function"
-        }
     } catch(err) {
         console.log("Setup error: " + err);
     }
@@ -93,8 +75,8 @@ module.exports.compile = async (options, cb) => {
     } catch(err) {
         return cb(err, null) //Provisioning is ongoing or something else went wrong with the s3 call
     }
-
-    return cb(null, webtaskFunction) //Compiler done, pass the new webtask function back
+    StartPythonServer(name);
+    return cb(null, RunPython) //Compiler done, pass the new webtask function back
 };
 
 function UnpackArchive(srcStream, dest) {
@@ -150,143 +132,63 @@ function GetAuthToken(secrets) {
     });
 }
 
-//These are the new webtask functions passed back from the compiler, chosen depending on the arguments
-function RunPythonFull(context, req, res) {
-    const pyDir = path.join(os.tmpdir(), context.meta.name);
+function StartPythonServer(name) {
+    const pyDir = path.join(os.tmpdir(), name); //use uuid?
     var options = {
         scriptPath: pyDir,
         pythonOptions: ["-u", "-W ignore"],
         args: [pyDir, port, path.join(pyDir, userScriptName), mainFunctionName]
     };
-    var py = pythonShell.run(pyHelperName, options, (err) => {
-        if(err) {
-            console.log("Python error: " + err);
-            //res.writeHead(444, "Python error");
-            res.end(err);
-        }
-    });
-    py.on('message', (message) => { 
-        console.log(message) 
-        if(message === "Ready") {
-            var middle = rp("http://127.0.0.1:" + port);
-            req.pipe(middle);
-            middle.pipe(res);
-        }
+    var py = new pythonShell(pyHelperName, options);
+    py.on('message', (message) => { console.log(message) });
+    py.end(function (err, code, signal) {
+        if (err) throw err;
+        console.log('The exit code was: ' + code);
+        console.log('The exit signal was: ' + signal);
+        console.log('Server shut down');
     });
 }
 
-const pyFileFull = `
+const pyFile = `
 import sys
 import imp
-from BaseHTTPServer import HTTPServer, BaseHTTPRequestHandler
+from wsgiref.simple_server import make_server # if we really need it, use bjoern
 
 dir = sys.argv[1]
 port = int(sys.argv[2])
 scriptPath = sys.argv[3]
 
 sys.path.append(dir)
-module = imp.load_source("script", scriptPath)
+module = imp.load_source("webtaskScript", scriptPath)
+mainFunc = getattr(module, sys.argv[4])
 
-class Handlers(BaseHTTPRequestHandler):
-    def do_POST(self):
-        print "Received POST request"
-        content_length = int(self.headers['Content-Length']) # Gets the size of data
-        print "Data length is {}".format(content_length)
-#        post_data = self.rfile.read(content_length) # Gets the data
-        print "Calling main function"
-        res = getattr(module, sys.argv[4])()#(post_data)
-        print "Done main function"
-#        self.send_response(200)
-#        self.end_headers()
-        self.wfile.write(res)
+def ServeRequest(env, start_response):
+    print "Received {0} request".format(env["REQUEST_METHOD"])
+    split = str.split(env['HTTP_WT_URL'], '?', 1)
+    env['PATH_INFO'] = split[0]
+    env['QUERY_STRING'] = split[1]
+#   do fancy things
+
+    iterable = None
+    try:
+        iterable = mainFunc(env, start_response)
+        for data in iterable:
+            yield data
+    finally:
+        if hasattr(iterable, 'close'):
+            iterable.close()
 
 def StartServer(port):
     print "Starting server"
-    address = ('', port)
-    httpd = HTTPServer(address, Handlers)
-    print "Ready"
+    httpd = make_server('', port, ServeRequest)
     httpd.serve_forever()
 
 StartServer(port)`;
 
-function RunPythonContext(context, cb) {
-    const pyDir = path.join(os.tmpdir(), context.meta.name);
-    var options = {
-        scriptPath: pyDir,
-        pythonOptions: ["-u", "-W ignore"],
-        args: [pyDir, port, path.join(pyDir, userScriptName), mainFunctionName, code]
-    };
-    var py = pythonShell.run(pyHelperName, options, (err) => {
-        if(err) return cb(err);
-    });
-    py.on('message', (message) => { 
-        console.log(message);
-        if(message.startsWith(code)) {
-            return cb(null, message.substring(128));
-        }
-    });
-    py.send(context, { mode: json });
+//This is the new webtask function passed back from the compiler
+function RunPython(context, req, res) {
+    req.headers['wt-url'] = req.originalUrl;
+    var middle = rp("http://127.0.0.1:" + port);
+    req.pipe(middle);
+    middle.pipe(res);
 }
-
-//TODO context sending doesn't work (crash with write after end (async))
-const pyFileContext = `
-import sys
-import imp
-
-dir = sys.argv[1]
-port = sys.argv[2]
-scriptPath = sys.argv[3]
-code = sys.argv[5]
-
-sys.path.append(dir)
-module = imp.load_source("script", scriptPath)
-
-context = sys.stdin.read()
-
-def Callback(err, data=None):
-    if data is None: #err is not None instead?
-        sys.stderr.write(err)
-    else:
-        print code + data
-    sys.exit()
-
-getattr(module, sys.argv[4])(context, Callback)`;
-
-function RunPythonCallback(cb) {
-    const pyDir = path.join(os.tmpdir(), context.meta.name); //TODO THERE IS NO CONTEXT!
-    var options = {
-        scriptPath: pyDir,
-        pythonOptions: ["-u", "-W ignore"],
-        args: [pyDir, port, path.join(pyDir, userScriptName), mainFunctionName, code]
-    };
-    var py = pythonShell.run(pyHelperName, options, (err) => {
-        if(err) { return cb(err); }
-    });
-    py.on('message', (message) => { 
-        console.log(message);
-        if(message.startsWith(code)) {
-            return cb(null, message.substring(128));
-        }
-    });
-}
-
-const pyFileCallback = `
-import sys
-import imp
-
-dir = sys.argv[1]
-port = sys.argv[2]
-scriptPath = sys.argv[3]
-code = sys.argv[5]
-
-sys.path.append(dir)
-module = imp.load_source("script", scriptPath)
-
-def Callback(err, data=None):
-    if data is None:
-        sys.stderr.write(err)
-    else:
-        print code + data
-    sys.exit()
-
-getattr(module, sys.argv[4])(Callback)`;
