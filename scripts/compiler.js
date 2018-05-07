@@ -11,6 +11,7 @@ const uuid = require('uuid').v4;
 const pump = require('pump');
 const tar = require('tar-fs');
 const pythonShell = require('python-shell');
+const proxy = require('http-proxy-middleware');
 
 const port = 3336;
 const mainFunctionName = "Main";
@@ -22,7 +23,7 @@ const requirementsFileName = "requirements.txt";
 module.exports.compile = async (options, cb) => {
     const name = options.meta.name;
     const pyDir = path.join(os.tmpdir(), name); //TODO put in subdirectory?
-    const webtaskFunction = null;
+    const simple = options.meta.simple;
 
     try { //set up directory and extract requirements, script, and main function name from options.script
         await fs.ensureDir(pyDir);
@@ -30,16 +31,20 @@ module.exports.compile = async (options, cb) => {
         await fs.writeFile(path.join(pyDir, pyContextName), pyContext);
         await fs.writeFile(path.join(pyDir, "webtaskContext.json"), JSON.stringify(options.context));
 
-        const buffer = Buffer.from(options.script);
-        if(buffer.toString('hex', 0, 2) === "1f8b") {
-            const scriptStream = streamify.createReadStream(buffer);
-            await UnpackArchive(scriptStream, pyDir);
+        if(simple){
+            await fs.writeFile(path.join(pyDir, userScriptName), options.script);
         } else {
-            //TODO will have issues if the first multiline is not a requirements list (if not included)
-            const regex = /"""\n?([\s\S]*?)"""|'''\n?([\s\S]*)'''/;
-            var match = regex.exec(buffer.toString('ascii'));
-            await fs.writeFile(path.join(pyDir, requirementsFileName), match[1] === "" ? match[2] : match [1]);
-            await fs.writeFile(path.join(pyDir, userScriptName), match.input.substring(match.index + match[0].length));
+            const buffer = Buffer.from(options.script);
+            if(buffer.toString('hex', 0, 2) === "1f8b") {
+                const scriptStream = streamify.createReadStream(buffer);
+                await UnpackArchive(scriptStream, pyDir);
+            } else {
+                //TODO will have issues if the first multiline is not a requirements list (if not included)
+                const regex = /"""\n?([\s\S]*?)"""|'''\n?([\s\S]*)'''/;
+                var match = regex.exec(buffer.toString('ascii'));
+                await fs.writeFile(path.join(pyDir, requirementsFileName), match[1] === "" ? match[2] : match [1]);
+                await fs.writeFile(path.join(pyDir, userScriptName), match.input.substring(match.index + match[0].length));
+            }
         }
 
         if(options.meta.main)
@@ -47,6 +52,11 @@ module.exports.compile = async (options, cb) => {
         console.log("Main function is " + mainFunctionName);
     } catch(err) {
         console.log("Setup error: " + err);
+    }
+
+    if(simple){
+        StartPythonServer(name);
+        return cb(null, RunPython) //Compiler done, pass the new webtask function back
     }
 
     try {
@@ -78,6 +88,7 @@ module.exports.compile = async (options, cb) => {
     } catch(err) {
         return cb(err, null) //Provisioning is ongoing or something else went wrong with the s3 call
     }
+
     StartPythonServer(name);
     return cb(null, RunPython) //Compiler done, pass the new webtask function back
 };
@@ -167,9 +178,6 @@ mainFunc = getattr(module, sys.argv[4])
 
 def ServeRequest(env, start_response):
     print "Received {0} request".format(env["REQUEST_METHOD"])
-    split = str.split(env['HTTP_WT_URL'], '?', 1)
-    env['PATH_INFO'] = split[0]
-    env['QUERY_STRING'] = split[1]
 #   do fancy things
 
     iterable = None
@@ -199,8 +207,7 @@ with open(os.path.join(os.path.dirname(os.path.abspath(__file__)), 'webtaskConte
 
 //This is the new webtask function passed back from the compiler
 function RunPython(context, req, res) {
-    req.headers['wt-url'] = req.originalUrl;
-    var middle = rp("http://127.0.0.1:" + port);
+    var middle = rp("http://127.0.0.1:" + port, { headers: req.rawHeaders });
     req.pipe(middle);
     middle.pipe(res);
 }
