@@ -53,6 +53,7 @@
     "fs-extra": "^5.0.0",
     "glob": "^7.1.2",
     "gunzip-maybe": "^1.4.1",
+    "http-proxy-middleware": "^0.18.0",
     "jwks-rsa": "^1.2.1",
     "limitd-client": "^2.13.2",
     "limitdctl": "^1.1.1",
@@ -67,6 +68,7 @@
     "streamifier": "^0.1.1",
     "tar-fs": "^1.16.0",
     "url-join": "^4.0.0",
+    "uuid": "^3.2.1",
     "yargs": "^11.0.0"
   },
   "devDependencies": {
