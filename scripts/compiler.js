@@ -14,7 +14,7 @@ const pythonShell = require('python-shell');
 const proxy = require('http-proxy-middleware');
 
 const port = 3336;
-const mainFunctionName = "Main";
+var mainFunctionName = "Main";
 const pyHelperName = "helper.py";
 const pyContextName = "wtcontext.py";
 const userScriptName = "script.py"; //Make sure these two bottom names are maintained by the cli
@@ -29,7 +29,7 @@ module.exports.compile = async (options, cb) => {
         await fs.ensureDir(pyDir);
         await fs.writeFile(path.join(pyDir, pyHelperName), pyHelper);
         await fs.writeFile(path.join(pyDir, pyContextName), pyContext);
-        await fs.writeFile(path.join(pyDir, "webtaskContext.json"), JSON.stringify(options.context));
+        await fs.writeFile(path.join(pyDir, "webtaskContext.json"), JSON.stringify(_objectWithoutProperties(options, ["script"])));
 
         if(simple){
             await fs.writeFile(path.join(pyDir, userScriptName), options.script);
@@ -55,7 +55,11 @@ module.exports.compile = async (options, cb) => {
     }
 
     if(simple){
-        StartPythonServer(name);
+        try{
+            await StartPythonServer(name);
+        } catch(err) {
+            console.log("Server error: " + err);
+        }
         return cb(null, RunPython) //Compiler done, pass the new webtask function back
     }
 
@@ -89,7 +93,11 @@ module.exports.compile = async (options, cb) => {
         return cb(err, null) //Provisioning is ongoing or something else went wrong with the s3 call
     }
 
-    StartPythonServer(name);
+    try{
+        await StartPythonServer(name);
+    } catch(err) {
+        console.log("Server error: " + err);
+    }
     return cb(null, RunPython) //Compiler done, pass the new webtask function back
 };
 
@@ -108,10 +116,10 @@ function UnpackArchive(srcStream, dest) {
     });
 }
 
-async function GetPythonLibrary(options, dest) {
+function GetPythonLibrary(options, dest) {
     return new Promise ((resolve, reject) => {
         try {
-            rp.post(options, (err, res, body) => {
+            rp.post(options, async (err, res, body) => {
                 if(err) return reject(err);
                 if(res.statusCode === 200) {
                     await UnpackArchive(req, dest).then(resolve());
@@ -146,20 +154,37 @@ function GetAuthToken(secrets) {
     });
 }
 
+function _objectWithoutProperties(obj, keys) { 
+    var target = {};
+    for (var i in obj) {
+        if (keys.indexOf(i) >= 0) continue;
+        if (!Object.prototype.hasOwnProperty.call(obj, i)) continue;
+        target[i] = obj[i];
+    }
+    return target;
+}
+
 function StartPythonServer(name) {
-    const pyDir = path.join(os.tmpdir(), name); //use uuid?
-    var options = {
-        scriptPath: pyDir,
-        pythonOptions: ["-u", "-W ignore"],
-        args: [pyDir, port, path.join(pyDir, userScriptName), mainFunctionName]
-    };
-    var py = new pythonShell(pyHelperName, options);
-    py.on('message', (message) => { console.log(message) });
-    py.end(function (err, code, signal) {
-        if (err) throw err;
-        console.log('The exit code was: ' + code);
-        console.log('The exit signal was: ' + signal);
-        console.log('Server shut down');
+    return new Promise ((resolve, reject) => {
+        const pyDir = path.join(os.tmpdir(), name); //use uuid?
+        var options = {
+            scriptPath: pyDir,
+            pythonOptions: ["-u", "-W ignore"],
+            args: [pyDir, port, path.join(pyDir, userScriptName), mainFunctionName]
+        };
+        var py = new pythonShell(pyHelperName, options);
+        py.on('message', (message) => { 
+            console.log(message);
+            if(message === "Python server ready") {
+                resolve();
+            }
+        });
+        py.end(function (err, code, signal) {
+            console.log('The exit code was: ' + code);
+            console.log('The exit signal was: ' + signal);
+            console.log('Server shut down');
+            if (err) return reject(err);
+        });
     });
 }
 
@@ -192,6 +217,7 @@ def ServeRequest(env, start_response):
 def StartServer(port):
     print "Starting server"
     httpd = make_server('', port, ServeRequest)
+    print "Python server ready"
     httpd.serve_forever()
 
 StartServer(port)`;
@@ -203,7 +229,8 @@ import json
 context = None
 
 with open(os.path.join(os.path.dirname(os.path.abspath(__file__)), 'webtaskContext.json')) as f:
-    context = json.load(f)`;
+    s = f.read()
+    context = json.loads(s)`;
 
 //This is the new webtask function passed back from the compiler
 function RunPython(context, req, res) {
