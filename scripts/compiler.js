@@ -11,7 +11,7 @@ const uuid = require('uuid').v4;
 const pump = require('pump');
 const tar = require('tar-fs');
 const pythonShell = require('python-shell');
-const proxy = require('http-proxy-middleware');
+const httpProxy = require('http-proxy');
 
 const port = 3336;
 var mainFunctionName = "Main";
@@ -19,6 +19,8 @@ const pyHelperName = "helper.py";
 const pyContextName = "wtcontext.py";
 const userScriptName = "script.py"; //Make sure these two bottom names are maintained by the cli
 const requirementsFileName = "requirements.txt";
+
+const proxy = httpProxy.createProxyServer({ target: 'http://127.0.0.1:' + port });//{ socketPath: "./tmp/wsgi.socket" } });
 
 module.exports.compile = async (options, cb) => {
     const name = options.meta.name;
@@ -234,7 +236,5 @@ with open(os.path.join(os.path.dirname(os.path.abspath(__file__)), 'webtaskConte
 
 //This is the new webtask function passed back from the compiler
 function RunPython(context, req, res) {
-    var middle = rp("http://127.0.0.1:" + port, { headers: req.rawHeaders });
-    req.pipe(middle);
-    middle.pipe(res);
+    proxy.web(req, res);
 }
