@@ -75,7 +75,7 @@ export default class Job {
     public retriesRemaining!: number;
     public runAfter!: Date;
 
-    private constructor(row: any) {
+    constructor(row: any) {
         Object.assign(this, dbToProp(row, overridesMap));
     }
 

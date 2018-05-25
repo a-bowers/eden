@@ -70,7 +70,7 @@ async function zipModules(
 }
 
 export async function provision(metadata: any) {
-    const { dependencyFile, s3Url, envUrl, language } = metadata;
+    const { dependencyFile, putUrl, envUrl, language } = metadata;
 
     await ensureDir(envUrl);
 
@@ -85,7 +85,7 @@ export async function provision(metadata: any) {
     try {
         logger.info("Fetchinc complete starting to zip and upload");
         const arch = await zipModules(language, envUrl, dependencyFile);
-        const uploadPromise = request.put(s3Url, {
+        const uploadPromise = request.put(putUrl, {
             method: 'PUT'
         });
         arch.stream.pipe(uploadPromise);

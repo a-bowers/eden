@@ -8,6 +8,7 @@ import {HttpError} from './error/HttpError';
 import createLogger from './logger';
 import { Queue } from './queue/Queue';
 import router from './routers/modules';
+import { Database } from './db/Database';
 
 const logger = createLogger('server');
 
