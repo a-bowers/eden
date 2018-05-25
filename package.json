@@ -21,6 +21,7 @@
   "bugs": {
     "url": "https://github.com/a-bowers/eden/issues"
   },
+  "main": "src/index.ts",
   "homepage": "https://github.com/a-bowers/eden#readme",
   "dependencies": {
     "@types/archiver": "^2.1.1",

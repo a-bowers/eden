@@ -1,15 +1,21 @@
 declare module "connect-ensure-permissions" {
     import * as Express from 'express';
 
-    export interface IPermissionProvider {
+    interface IPermissionProvider {
         (req: Express.Request): string[];
     }
 
-    export interface IPermissionCheckerOptions {
+    interface IPermissionCheckerOptions {
         getPermissionsFromRequest ?: IPermissionProvider
     }
 
-    export default function createPermissionChecker(
-        options?: IPermissionCheckerOptions
-    ): (permission: string) => Express.Handler;
+    interface IScopeCheckerBuilder{
+        (permission: string): Express.Handler
+    }
+
+    interface ICreatePermissionChecker {
+        (options?: IPermissionCheckerOptions): IScopeCheckerBuilder
+    }
+    const k: ICreatePermissionChecker;
+    export = k;
 }
