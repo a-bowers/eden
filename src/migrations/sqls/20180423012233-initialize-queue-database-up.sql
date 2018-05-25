@@ -10,7 +10,7 @@ CREATE TABLE pg_queue_simple_jobs (
     run_after_timestamp                 TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
     started_at                          TIMESTAMP,
     updated_at                          TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-    submitted_at                        TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+    submitted_at                        TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
     metadata                            JSONB NOT NULL DEFAULT '{}'
 );
 

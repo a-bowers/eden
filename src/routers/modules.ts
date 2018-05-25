@@ -1,4 +1,4 @@
-import createPermissionChecker from 'connect-ensure-permissions';
+import createPermissionChecker = require('connect-ensure-permissions');
 import { NextFunction, Request, Response, Router } from 'express';
 import * as os from 'os';
 import * as path from 'path';

@@ -1,5 +1,5 @@
 import createLogger from './logger';
-import {Queue} from './queue/Queue';
+import jobs from './queue';
 import {provision} from './scripts/provision';
 
 const logger = createLogger('worker');
@@ -7,8 +7,7 @@ const logger = createLogger('worker');
 export default async function createWorker() {
     logger.info(`Creating a worker`);
 
-    const jobs = await Queue.create();
-    jobs.job('provision', provision);
+    jobs.job('provision', provision as any);
 
     logger.info(`Worker created and listening`);
 }
