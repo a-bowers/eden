@@ -96,16 +96,16 @@ export class Queue {
 
     // Listen for notification
     private async subscribe(channel: string) {
-    await db.listener.query(`LISTEN ${channel}`);
-}
+        await db.listener.query(`LISTEN ${channel}`);
+    }
 
     private async unsubscribe(channel: string) {
-    await db.listener.query(`UNLISTEN ${channel}`);
-}
+        await db.listener.query(`UNLISTEN ${channel}`);
+    }
 
     private handleNotification(msg: pg.Notification) {
-    const { channel, payload } = msg;
-    const jobName = channel.replace('pg_queue_simple_trigger_created_', '');
-    this.loop(jobName);
-}
+        const { channel, payload } = msg;
+        const jobName = channel.replace('pg_queue_simple_trigger_created_', '');
+        this.loop(jobName);
+    }
 }

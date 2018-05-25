@@ -21,11 +21,11 @@ const GET_NEXT_FREE_SCRIPT = q(`
             WHERE status = 'waiting'
             AND type = $1
             AND run_after_timestamp < CURRENT_TIMESTAMP
-            ORDER BY jobid
+            ORDER BY id
             LIMIT 1
             FOR UPDATE SKIP LOCKED
         )
-    RETURNING id, metadata, status, retries_remaining, run_after
+    RETURNING id, metadata, status, retries_remaining, run_after_timestamp
 `);
 
 const UPDATE_JOB_STATUS_SCRIPT = q(`
