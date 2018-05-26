@@ -62,8 +62,8 @@ async function provisionModule(req: Request, res: Response, next: NextFunction) 
     try {
         logger.debug('Checking for Deployed version in Database');
         let mod = await Module.getByClientAndName(clientId, wtName, transaction);
-        const envUrl = path.join(os.tmpdir(), clientId, body.wtName);
-        const s3Path = path.join(env('S3_PATH_PREFIX'), clientId, body.wtName);
+        const envUrl = path.join(os.tmpdir(), clientId, wtName);
+        const s3Path = path.join(env('S3_PATH_PREFIX'), clientId, wtName);
         const s3Options = {
             Bucket: env('AWS_S3_BUCKET'),
             Key: s3Path,

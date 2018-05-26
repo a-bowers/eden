@@ -14,8 +14,8 @@ export class Module {
         createModule: `INSERT into ${Module.tableName}(
             wt_name, client_id
         ) VALUES($1, $2) returning *`,
-        getByClientAndName: `SELECT * ${Module.tableName} WHERE client_id=$1 AND wt_name=$2`,
-        getById: `SELECT * frome ${Module.tableName} WHERE id=$1`,
+        getByClientAndName: `SELECT * FROM ${Module.tableName} WHERE client_id=$1 AND wt_name=$2`,
+        getById: `SELECT * from ${Module.tableName} WHERE id=$1`,
         queryJobs: `SELECT * from ${Module.jobModuleMapName} WHERE id=$1`,
         updateHash: `UPDATE ${Module.tableName} SET dependency_file_hash=$2 WHERE id=$1`,
     };
