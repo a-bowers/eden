@@ -1,5 +1,6 @@
 import Color from 'chalk';
 import * as Debug from 'debug';
+const appName = 'eden';
 /**
  * Debug powered Magic logger.
  */
@@ -14,7 +15,7 @@ const fileInfoStr =
 export default function createLogger(namespace: string): ILogR {
   const logger: ILogR = {} as any;
   ['info', 'error', 'warn', 'debug'].reduce((l, method) => {
-    const log = Debug(`${namespace}:${method}`);
+    const log = Debug(`${appName}:${namespace}:${method}`);
     l[method] = ((fmt: string, ...args: any[]) =>
       log(`${fileInfoStr} ${fmt}`, ...args)) as Debug.IDebugger;
     return l;

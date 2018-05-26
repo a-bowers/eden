@@ -8,7 +8,6 @@ import {HttpError} from './error/HttpError';
 import createLogger from './logger';
 import { Queue } from './queue/Queue';
 import router from './routers/modules';
-import { Database } from './db/Database';
 
 const logger = createLogger('server');
 
@@ -50,10 +49,12 @@ export default async function createServer() {
             const httpError = err as HttpError;
             res.status(httpError.code).json(httpError);
         }
+
+        logger.error('Unhandled error', err);
+
         res.status(500).json({
             code: 500,
-            message: 'Internal Server Error',
-            body: err
+            message: 'Internal Server Error'
         });
     });
 

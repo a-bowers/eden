@@ -2,12 +2,23 @@ import { exec } from 'child_process';
 import { writeFile } from 'fs';
 import { join } from 'path';
 import { promisify } from 'util';
+import env from '../../../env';
 
 const writeFileAsync = promisify(writeFile);
 const execAsync = promisify(exec);
 
 export async function setup(directory: string) {
-    return execAsync(`virtualenv --no-site-packages --always-copy .`, {
+    // For those tortured souls with OSX
+    const nonSysPython = env('PYTHON_EXE');
+    let command = 'virtualenv --no-site-packages --always-copy';
+
+    if (nonSysPython) {
+        command += ` --python=${nonSysPython}`;
+    }
+
+    command += ' .';
+
+    return execAsync(command, {
         cwd: directory
     });
 }
@@ -18,6 +29,6 @@ export async function install(directory: string, dependencyFile: string) {
         encoding: 'utf8'
     });
     return execAsync(`pip install -r ../requirements.txt`, {
-        cwd: join(directory, 'Scripts'),
+        cwd: join(directory, 'bin'),
     });
 }

@@ -5,7 +5,7 @@ import * as fs from 'fs-extra';
 import * as os from 'os';
 import * as path from 'path';
 import * as yargs from 'yargs';
-import {Queue} from '../src/queue/Queue';
+import queue from '../src/queue';
 import {provision} from '../src/scripts/provision';
 
 dotenv.load()
@@ -45,13 +45,11 @@ async function publish(arg: yargs.Arguments) {
         directory: dir,
         requirements: file
     })} = arg;
-    const queue = await Queue.create();
     await queue.publish(t, d);
     process.exit(0);
 }
 
 async function subscribe(arg: yargs.Arguments) {
     const {t, e} = arg;
-    const queue = await Queue.create();
     queue.job('provision', provision);
 }

@@ -44,9 +44,12 @@ async function zipModules(
     const lang = loadLanguage(language);
     const arch = archiver('tar', {
         zlib: {
-            level: 6
+            level: 9
         }
     });
+
+    const stream = createWriteStream(path.join(directory, "archive.tar.gz"));
+    arch.pipe(stream);
 
     const promise = new Promise((resolve, reject) => {
         arch.on('warning', (err) => {
@@ -65,7 +68,7 @@ async function zipModules(
 
     return {
         promise,
-        stream: arch,
+        stream
     };
 }
 
@@ -85,11 +88,18 @@ export async function provision(metadata: any) {
     try {
         logger.info("Fetchinc complete starting to zip and upload");
         const arch = await zipModules(language, envUrl, dependencyFile);
+
+        logger.info("Utilizing the amazon service");
+
         const uploadPromise = request.put(putUrl, {
             method: 'PUT'
         });
+
         arch.stream.pipe(uploadPromise);
+
+        logger.info("Archive for the upload to complete");
         await arch.promise;
+
         logger.debug("Archival Complete");
         await uploadPromise;
         logger.debug("Upload complete");

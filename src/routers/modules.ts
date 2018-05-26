@@ -12,10 +12,14 @@ import s3 from '../s3';
 import { hash } from '../utils/hash';
 
 const CLIENT_PADDING = '@clients';
+const AWS_POST_EXPIRY = parseInt(env('AWS_POST_EXPIRY'), 10);
+const AWS_GET_EXPIRY  = parseInt(env('AWS_GET_EXPIRY'), 10);
 
 const logger = createLogger('router:module');
 const requires = createPermissionChecker();
 const router: Router = Router();
+
+
 // @TODO move this to utils/tokenUtils
 function getClientIDfromSub(sub: string) {
     return sub.replace(CLIENT_PADDING, '');
@@ -66,7 +70,7 @@ async function provisionModule(req: Request, res: Response, next: NextFunction) 
         const s3Path = path.join(env('S3_PATH_PREFIX'), clientId, wtName);
         const s3Options = {
             Bucket: env('AWS_S3_BUCKET'),
-            Key: s3Path,
+            Key: s3Path
         };
 
         // Check if module exists and if so,
@@ -76,7 +80,7 @@ async function provisionModule(req: Request, res: Response, next: NextFunction) 
             // If this is not working please refer to
             // https://stackoverflow.com/questions/38831829/nodejs-aws-sdk-s3-generate-presigned-url
             const getUrl = s3.getSignedUrl('getObject', {
-                Expires: env('AWS_GET_EXPIRY'),
+                Expires: AWS_GET_EXPIRY,
                 ...s3Options
             });
 
@@ -97,8 +101,8 @@ async function provisionModule(req: Request, res: Response, next: NextFunction) 
         // Create an S3 putUrl
         // @TODO: Inspect what is the best safest time.
         const putUrl = s3.getSignedUrl('putObject', {
-            Expires: env('AWS_POST_EXPIRY'),
-            ...s3Options
+            Expires: AWS_POST_EXPIRY,
+            ...s3Options,
         });
 
         // Publish a JOB Request
