@@ -18,11 +18,11 @@ const runtimeTypes = {
 
     if (APP_MODE.includes(runtimeTypes.subscriber)) {
         await createWorker();
-        console.log("fired up and ready to work");
+        logger.info("fired up and ready to work");
     }
     if (APP_MODE.includes(runtimeTypes.publisher)) {
         await createServer();
-        console.log("Fired up and ready to SERVE!");
+        logger.info("Fired up and ready to SERVE!");
     }
 
     logger.info(`${name} started successfully`);

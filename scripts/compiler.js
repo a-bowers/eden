@@ -26,6 +26,7 @@ module.exports.compile = async (options, cb) => {
     const name = options.meta.name;
     const pyDir = path.join(os.tmpdir(), name); //TODO put in subdirectory?
     const simple = options.meta.simple;
+    const test = options.meta.test;
 
     try { //set up directory and extract requirements, script, and main function name from options.script
         await fs.ensureDir(pyDir);
@@ -33,7 +34,7 @@ module.exports.compile = async (options, cb) => {
         await fs.writeFile(path.join(pyDir, pyContextName), pyContext);
         await fs.writeFile(path.join(pyDir, "webtaskContext.json"), JSON.stringify(_objectWithoutProperties(options, ["script"])));
 
-        if(simple){
+        if(simple || test){
             await fs.writeFile(path.join(pyDir, userScriptName), options.script);
         } else {
             const buffer = Buffer.from(options.script);
@@ -68,8 +69,10 @@ module.exports.compile = async (options, cb) => {
     try {
         const requirementsFilePath = path.join(pyDir, requirementsFileName);
         const requirements = await fs.readFile(requirementsFilePath, { encoding: 'ascii' });
-        const provisionerurl = urljoin("https://example.com", secrets.CLIENT_ID, name); //TODO URL
-
+        var u = test ? "http://localhost:5000" : "https://example.com";
+        if(test)
+        const provisionerurl = urljoin(u, options.secrets.CLIENT_ID, name); //TODO URL
+        
         var token = await GetAuthToken(options.secrets)
         .catch((err) => { Promise.reject("Error getting auth token: " + err) });
 
@@ -193,7 +196,7 @@ function StartPythonServer(name) {
 const pyHelper = `
 import sys
 import imp
-from wsgiref.simple_server import make_server # if we really need it, use bjoern
+from wsgiref.simple_server import make_server
 
 dir = sys.argv[1]
 port = int(sys.argv[2])
@@ -231,10 +234,13 @@ import json
 context = None
 
 with open(os.path.join(os.path.dirname(os.path.abspath(__file__)), 'webtaskContext.json')) as f:
-    s = f.read()
-    context = json.loads(s)`;
+    context = json.loads(f.read())`;
 
 //This is the new webtask function passed back from the compiler
 function RunPython(context, req, res) {
     proxy.web(req, res);
 }
+```
+function RunPython(context, req, res) {
+    ymir.load('module').function(context, req, res); //wsgi form, have way to call function from string?
+}```

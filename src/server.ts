@@ -30,7 +30,7 @@ export default async function createServer() {
 
         // Validate the audience and the issuer.
         audience: AUTH0_AUDIENCE,
-        issuer: `https://${AUTH0_DOMAIN}`,
+        issuer: `https://${AUTH0_DOMAIN}/`,
 
         // Dynamically provide a signing key
         // based on the kid in the header and
@@ -43,8 +43,7 @@ export default async function createServer() {
         })
     });
 
-    app.use(BodyParser.json());
-    app.use('/provision', jwtAuthz, router);
+    app.use('/modules', jwtAuthz, BodyParser.json(), router);
 
     app.use((err: Error, req: Express.Request, res: Express.Response, next: Express.NextFunction) => {
         if (err instanceof HttpError) {
@@ -53,7 +52,8 @@ export default async function createServer() {
         }
         res.status(500).json({
             code: 500,
-            message: 'Internal Server Error'
+            message: 'Internal Server Error',
+            body: err
         });
     });
 

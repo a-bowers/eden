@@ -22,13 +22,13 @@ function getClientIDfromSub(sub: string) {
 }
 
 async function provisionModule(req: Request, res: Response, next: NextFunction) {
+    logger.info("Begin Provision");
     const user = req.user!;
     const body = req.body;
 
     const authorizedClientId = getClientIDfromSub(user.sub);
     const clientId = req.params.clientId;
     const wtName = req.params.wtName;
-
 
     logger.info('Handling new request');
 
@@ -127,8 +127,10 @@ async function provisionModule(req: Request, res: Response, next: NextFunction) 
     }
 }
 
-router.post('/modules/:clientId/:wtName', requires('provision:modules'), provisionModule);
-
+router.post('/:clientId/:wtName', requires('provision:modules'), provisionModule);
+// router.get("/", (r, re) => {
+//     re.json({"Eyyyyy": "kappa!"});
+// });
 export default router;
 
 
