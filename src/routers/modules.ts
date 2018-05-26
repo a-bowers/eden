@@ -91,7 +91,6 @@ async function provisionModule(req: Request, res: Response, next: NextFunction) 
             // Start provisioning;
             logger.debug('Deployed version not found, creating new module deployment');
             mod = await Module.create(clientId, wtName, transaction);
-            return;
         }
 
         logger.debug('The current deployed version does not match the requested, queuing new packaging');
