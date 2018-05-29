@@ -113,13 +113,14 @@ async function provisionModule(
         logger.debug(
             "The current deployed version does not match the requested, queuing new packaging"
         );
+
         // Create an S3 putUrl
         // @TODO: Inspect what is the best safest time.
         const form = s3.createPresignedPost({
             Bucket: AWS_S3_BUCKET,
             Expires: AWS_POST_EXPIRY,
             Fields: {
-                Key: s3Path
+                Key: s3Path,
             }
         });
 
@@ -128,7 +129,7 @@ async function provisionModule(
             dependencyFile,
             envUrl,
             form,
-            language
+            language,
         });
 
         // @TODO add Job Deployement Request to Module

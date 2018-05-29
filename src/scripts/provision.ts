@@ -1,7 +1,7 @@
 import * as archiver from "archiver";
 import { exec } from "child_process";
 import * as chokidar from "chokidar";
-import { createWriteStream, writeFile, createReadStream } from "fs";
+import { createReadStream, createWriteStream } from "fs";
 import { ensureDir } from "fs-extra";
 import { tmpdir } from "os";
 import * as path from "path";
@@ -10,11 +10,9 @@ import { promisify } from "util";
 import env from "../env";
 import createLogger from "../logger";
 import { loadLanguage } from "./language";
-import { PassThrough } from "stream";
 
 const logger = createLogger("provisioner");
 const execAsync = promisify(exec);
-const writeFileAsync = promisify(writeFile);
 
 async function installModules(
     language: string,
@@ -50,7 +48,13 @@ async function zipModules(
         }
     });
 
-    const promise = new Promise((resolve, reject) => {
+    // This is a tad-bit-expensive but we have
+    // more RAM than HDD and, I really don't want to
+    // setup STS tokens for this stuff or write
+    // a streaming uploader for postUrls so.. meh
+    // The SSD is acting like a concat stream here
+    const archPath = path.join(directory, 'archive.tar.gz');
+    const promise = new Promise<string>((resolve, reject) => {
         arch.on("warning", err => {
             if (err.code === "ENOENT") {
                 logger.warn(`while archiving, ${directory}`, err);
@@ -59,21 +63,16 @@ async function zipModules(
             reject(err);
         });
         arch.on("error", reject);
-        arch.on("finish", () => resolve(true));
+        arch.on("finish", () => resolve(archPath));
     });
 
     // Improve this
     arch.glob("**", await lang.getGlobParams(directory, dependencyFile));
-
-    const passThrough = new PassThrough();
-    arch.pipe(passThrough);
+    arch.pipe(createWriteStream(archPath));
 
     arch.finalize();
 
-    return {
-        promise,
-        stream: passThrough
-    };
+    return promise;
 }
 
 export async function provision(metadata: any) {
@@ -90,35 +89,22 @@ export async function provision(metadata: any) {
     }
 
     try {
-        logger.info("Fetchinc complete starting to zip and upload");
+        logger.info("Fetching complete starting to zip");
         const arch = await zipModules(language, envUrl, dependencyFile);
 
-        logger.info("Utilizing the amazon service");
-
-        const { url, fields } = form;
-
-        logger.info("Form", fields);
-
-        const formData = {
-            ...fields,
-            file: {
-                options: {
-                    contentType: "text/plain",
-                    filename: "hello"
-                },
-                value: arch.stream
-            }
-        };
+        const {url, fields} = form;
+        logger.debug("Archival Complete Starting to Upload to ", url);
 
         const r = request.post({
-            formData,
-            url
+            formData: {
+                ...fields,
+                file: createReadStream(arch),
+            },
+            url// : 'http://localhost:3500',
         });
 
-        logger.info("Archive for the upload to complete");
-        await arch.promise;
+        // createReadStream(arch).pipe(r);
 
-        logger.debug("Archival Complete");
         await r;
         logger.debug("Upload complete");
         logger.info("Provisioning Complete");
