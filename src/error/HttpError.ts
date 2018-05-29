@@ -1,4 +1,4 @@
-import {STATUS_CODES} from 'http';
+import { STATUS_CODES } from "http";
 
 export class HttpError extends Error {
     public code: number;
@@ -13,10 +13,10 @@ export class HttpError extends Error {
         this.message = message!;
     }
 
-    public toJSON(){
+    public toJSON() {
         return {
             code: this.code,
             message: this.message
-        }
+        };
     }
 }

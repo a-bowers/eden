@@ -7,8 +7,13 @@
   },
   "scripts": {
     "test": "echo \"Error: no test specified\" && exit 1",
-    "start": "nodemon --exec ts-node ./src/index.ts",
-    "queue": "ts-node .bin/queue.ts",
+    "dev": "nodemon --exec ts-node ./lib/index.ts",
+    "clean": "rimraf lib && rimraf coverage",
+    "format": "prettier --write \"{src,__tests__}/**/*.ts\"",
+    "lint": "tslint --force --format verbose \"src/**/*.ts\"",
+    "prepublish": "npm run build",
+    "prebuild": "npm run clean && npm run format && npm run lint && echo Using TypeScript && tsc --version",
+    "build": "tsc --pretty",
     "limitd": "limitd",
     "limitctl": "limitctl"
   },

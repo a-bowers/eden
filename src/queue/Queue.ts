@@ -1,37 +1,36 @@
-import { EventEmitter } from 'events';
-import ms = require('ms');
-import * as pg from 'pg';
-import { instance as db } from '../db';
-import { Database } from '../db/Database';
-import { Transaction } from '../db/Transaction';
-import createLogger from '../logger';
-import Job from '../models/Job';
+import { EventEmitter } from "events";
+import ms = require("ms");
+import * as pg from "pg";
+import { instance as db } from "../db";
+import { Database } from "../db/Database";
+import { Transaction } from "../db/Transaction";
+import createLogger from "../logger";
+import Job from "../models/Job";
 
-const logger = createLogger('queue');
+const logger = createLogger("queue");
 export type JobHandler = (metadata: any) => Promise<boolean>;
 
 export class Queue {
     private jobMap = new Map<string, JobHandler>();
     private current = 0;
-    public constructor(
-        public readonly maxConcurrency: number = 5,
-    ) {
+    public constructor(public readonly maxConcurrency: number = 5) {
         this.handleNotification = this.handleNotification.bind(this);
         // Ugly hack is needed as upstream type do not support notification
         // event type
-        db.listener.on(
-            'notification' as any,
-            this.handleNotification as any
-        );
+        db.listener.on("notification" as any, this.handleNotification as any);
     }
 
-    public async publish(type: string, metadata: any, tOrDb: Transaction | Database = db) {
+    public async publish(
+        type: string,
+        metadata: any,
+        tOrDb: Transaction | Database = db
+    ) {
         return Job.create(type, metadata, tOrDb);
     }
 
     public job(type: string, handler: JobHandler) {
         if (this.jobMap.has(type)) {
-            throw new Error('You can only assign one listener per job');
+            throw new Error("You can only assign one listener per job");
         }
         this.jobMap.set(type, handler);
         this.subscribe(`pg_queue_simple_trigger_created_${type}`);
@@ -69,15 +68,17 @@ export class Queue {
 
                 try {
                     const completed = await handler(job.metadata);
-                    job.status = completed ? 'completed' : 'failed';
+                    job.status = completed ? "completed" : "failed";
                 } catch (e) {
                     if (job.retriesRemaining > 0) {
-                        job.status = 'waiting';
+                        job.status = "waiting";
                         job.retriesRemaining--;
                         // Exponential back-off
-                        job.runAfter = new Date(job.runAfter.getTime() + ms('10m'));
+                        job.runAfter = new Date(
+                            job.runAfter.getTime() + ms("10m")
+                        );
                     } else {
-                        job.status = 'failed';
+                        job.status = "failed";
                     }
                 }
 
@@ -85,7 +86,7 @@ export class Queue {
                 await transaction.commit();
             } catch (e) {
                 await transaction.rollback();
-                logger.error('Failed to finish job', e);
+                logger.error("Failed to finish job", e);
             } finally {
                 await transaction.release();
             }
@@ -105,7 +106,7 @@ export class Queue {
 
     private handleNotification(msg: pg.Notification) {
         const { channel, payload } = msg;
-        const jobName = channel.replace('pg_queue_simple_trigger_created_', '');
+        const jobName = channel.replace("pg_queue_simple_trigger_created_", "");
         this.loop(jobName);
     }
 }

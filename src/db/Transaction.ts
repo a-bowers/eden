@@ -1,11 +1,7 @@
-import * as pg from 'pg';
+import * as pg from "pg";
 
 export class Transaction {
-
-    constructor(
-        private readonly client: pg.PoolClient
-    ) {
-    }
+    constructor(private readonly client: pg.PoolClient) {}
 
     public async begin() {
         await this.client.query("BEGIN");
@@ -13,7 +9,6 @@ export class Transaction {
 
     public async commit() {
         await this.client.query("COMMIT");
-
     }
 
     public async rollback() {
@@ -24,7 +19,7 @@ export class Transaction {
         await this.client.release();
     }
 
-    public async query(statement: string, params: any []) {
+    public async query(statement: string, params: any[]) {
         return this.client.query(statement, params);
     }
 }

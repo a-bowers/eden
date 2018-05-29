@@ -1,22 +1,22 @@
-import { exec } from 'child_process';
-import { writeFile } from 'fs';
-import { join } from 'path';
-import { promisify } from 'util';
-import env from '../../../env';
+import { exec } from "child_process";
+import { writeFile } from "fs";
+import { join } from "path";
+import { promisify } from "util";
+import env from "../../../env";
 
 const writeFileAsync = promisify(writeFile);
 const execAsync = promisify(exec);
 
 export async function setup(directory: string) {
     // For those tortured souls with OSX
-    const nonSysPython = env('PYTHON_EXE');
-    let command = 'virtualenv --no-site-packages --always-copy';
+    const nonSysPython = env("PYTHON_EXE");
+    let command = "virtualenv --no-site-packages --always-copy";
 
     if (nonSysPython) {
         command += ` --python=${nonSysPython}`;
     }
 
-    command += ' .';
+    command += " .";
 
     return execAsync(command, {
         cwd: directory
@@ -24,11 +24,11 @@ export async function setup(directory: string) {
 }
 
 export async function install(directory: string, dependencyFile: string) {
-    const requirementsFilePath = join(directory, 'requirements.txt');
+    const requirementsFilePath = join(directory, "requirements.txt");
     await writeFileAsync(requirementsFilePath, dependencyFile, {
-        encoding: 'utf8'
+        encoding: "utf8"
     });
     return execAsync(`pip install -r ../requirements.txt`, {
-        cwd: join(directory, 'bin'),
+        cwd: join(directory, "bin")
     });
 }

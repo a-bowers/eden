@@ -1,10 +1,9 @@
-
 export interface IParam {
-    [key:string]: any;
+    [key: string]: any;
 }
 
 export interface IMap {
-    [key:string]: string
+    [key: string]: string;
 }
 
 export function dbToProp(params: IParam, map: IMap) {

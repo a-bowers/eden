@@ -1,10 +1,10 @@
-import * as pg from 'pg';
-import { Database } from '../db/Database';
-import { Transaction } from '../db/Transaction';
-import { dbToProp } from '../utils/db';
-import { TransOrDB } from './helpers';
+import * as pg from "pg";
+import { Database } from "../db/Database";
+import { Transaction } from "../db/Transaction";
+import { dbToProp } from "../utils/db";
+import { TransOrDB } from "./helpers";
 
-export type JOB_STATUSES = 'waiting' | 'busy' | 'failed' | 'completed';
+export type JOB_STATUSES = "waiting" | "busy" | "failed" | "completed";
 const q = (str: string) => str.trim();
 const TABLE_NAME = `pg_queue_simple_jobs`;
 
@@ -38,17 +38,15 @@ const UPDATE_JOB_STATUS_SCRIPT = q(`
 `);
 
 const overridesMap = {
-    'retries_remaining': 'retriesRemaining',
-    'run_after_timestamp': 'runAfter',
-    'submitted_at': 'submittedAt',
-    'updated_at': 'updatedAt'
+    retries_remaining: "retriesRemaining",
+    run_after_timestamp: "runAfter",
+    submitted_at: "submittedAt",
+    updated_at: "updatedAt"
 };
 
 export default class Job {
     public static async getByType(type: string, transaction: TransOrDB) {
-        const result = await transaction.query(
-            GET_NEXT_FREE_SCRIPT, [type]
-        );
+        const result = await transaction.query(GET_NEXT_FREE_SCRIPT, [type]);
 
         if (!result.rowCount) {
             return;
@@ -57,10 +55,12 @@ export default class Job {
         return new Job(result.rows[0]);
     }
 
-    public static async create(type: string, metadata: any, transaction : TransOrDB) {
-        const result = await transaction.query(
-            CREATE_SCRIPT, [type, metadata]
-        );
+    public static async create(
+        type: string,
+        metadata: any,
+        transaction: TransOrDB
+    ) {
+        const result = await transaction.query(CREATE_SCRIPT, [type, metadata]);
         if (!result.rowCount) {
             return null;
         }
@@ -80,18 +80,16 @@ export default class Job {
     }
 
     public async update(transaction: TransOrDB) {
-        const result = await transaction.query(
-            UPDATE_JOB_STATUS_SCRIPT, [
-                this.id,
-                this.status,
-                this.retriesRemaining,
-                (Date.now() / 1000.0),
-                this.runAfter
-            ]
-        );
+        const result = await transaction.query(UPDATE_JOB_STATUS_SCRIPT, [
+            this.id,
+            this.status,
+            this.retriesRemaining,
+            Date.now() / 1000.0,
+            this.runAfter
+        ]);
 
         if (!result.rowCount) {
-            throw new Error('Unable to update');
+            throw new Error("Unable to update");
         }
     }
 }

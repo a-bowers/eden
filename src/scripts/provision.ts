@@ -1,17 +1,18 @@
-import * as archiver from 'archiver';
-import { exec } from 'child_process';
-import * as chokidar from 'chokidar';
-import { createWriteStream, writeFile } from 'fs';
-import { ensureDir } from 'fs-extra';
-import { tmpdir } from 'os';
-import * as path from 'path';
-import * as request from 'request-promise';
-import { promisify } from 'util';
-import env from '../env';
-import createLogger from '../logger';
-import { loadLanguage } from './language';
+import * as archiver from "archiver";
+import { exec } from "child_process";
+import * as chokidar from "chokidar";
+import { createWriteStream, writeFile, createReadStream } from "fs";
+import { ensureDir } from "fs-extra";
+import { tmpdir } from "os";
+import * as path from "path";
+import * as request from "request-promise";
+import { promisify } from "util";
+import env from "../env";
+import createLogger from "../logger";
+import { loadLanguage } from "./language";
+import { PassThrough } from "stream";
 
-const logger = createLogger('provisioner');
+const logger = createLogger("provisioner");
 const execAsync = promisify(exec);
 const writeFileAsync = promisify(writeFile);
 
@@ -42,38 +43,41 @@ async function zipModules(
     dependencyFile: string
 ) {
     const lang = loadLanguage(language);
-    const arch = archiver('tar', {
-        zlib: {
+    const arch = archiver("tar", {
+        gzip: true,
+        gzipOptions: {
             level: 9
         }
     });
 
-    const stream = createWriteStream(path.join(directory, "archive.tar.gz"));
-    arch.pipe(stream);
-
     const promise = new Promise((resolve, reject) => {
-        arch.on('warning', (err) => {
-            if (err.code === 'ENOENT') {
+        arch.on("warning", err => {
+            if (err.code === "ENOENT") {
                 logger.warn(`while archiving, ${directory}`, err);
                 return;
             }
             reject(err);
         });
-        arch.on('error', reject);
-        arch.on('finish', () => resolve(true));
+        arch.on("error", reject);
+        arch.on("finish", () => resolve(true));
     });
 
     // Improve this
-    arch.glob('**', await lang.getGlobParams(directory, dependencyFile));
+    arch.glob("**", await lang.getGlobParams(directory, dependencyFile));
+
+    const passThrough = new PassThrough();
+    arch.pipe(passThrough);
+
+    arch.finalize();
 
     return {
         promise,
-        stream
+        stream: passThrough
     };
 }
 
 export async function provision(metadata: any) {
-    const { dependencyFile, putUrl, envUrl, language } = metadata;
+    const { dependencyFile, form, envUrl, language } = metadata;
 
     await ensureDir(envUrl);
 
@@ -91,22 +95,37 @@ export async function provision(metadata: any) {
 
         logger.info("Utilizing the amazon service");
 
-        const uploadPromise = request.put(putUrl, {
-            method: 'PUT'
-        });
+        const { url, fields } = form;
 
-        arch.stream.pipe(uploadPromise);
+        logger.info("Form", fields);
+
+        const formData = {
+            ...fields,
+            file: {
+                options: {
+                    contentType: "text/plain",
+                    filename: "hello"
+                },
+                value: arch.stream
+            }
+        };
+
+        const r = request.post({
+            formData,
+            url
+        });
 
         logger.info("Archive for the upload to complete");
         await arch.promise;
 
         logger.debug("Archival Complete");
-        await uploadPromise;
+        await r;
         logger.debug("Upload complete");
         logger.info("Provisioning Complete");
 
         return true;
     } catch (err) {
+        logger.info(err);
         logger.error("Failed to zip and upload modules to s3");
     }
-};
+}

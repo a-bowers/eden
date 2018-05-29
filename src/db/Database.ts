@@ -1,18 +1,18 @@
-import { readdir } from 'fs';
-import { join } from 'path';
-import * as pg from 'pg';
-import { promisify } from 'util';
-import env from '../env';
-import { Transaction } from './Transaction';
+import { readdir } from "fs";
+import { join } from "path";
+import * as pg from "pg";
+import { promisify } from "util";
+import env from "../env";
+import { Transaction } from "./Transaction";
 
 const readDirAsync = promisify(readdir);
 
 export class Database {
-    public readonly models : {[key: string]: any}= {};
+    public readonly models: { [key: string]: any } = {};
     public readonly listener: pg.Client;
     public readonly pool: pg.Pool;
 
-    constructor(dbUrl: string = env('DATABASE_URL')) {
+    constructor(dbUrl: string = env("DATABASE_URL")) {
         this.listener = new pg.Client(dbUrl);
         this.pool = new pg.Pool({
             connectionString: dbUrl
@@ -23,7 +23,7 @@ export class Database {
         await this.listener.connect();
     }
 
-    public async query(statement: string, params: any []) {
+    public async query(statement: string, params: any[]) {
         return this.pool.query(statement, params);
     }
 

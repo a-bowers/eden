@@ -1,11 +1,11 @@
-import queue from '../Queue';
-import { dbToProp } from '../utils/db';
-import { TransOrDB } from './helpers';
-import Job from './Job';
+import queue from "../Queue";
+import { dbToProp } from "../utils/db";
+import { TransOrDB } from "./helpers";
+import Job from "./Job";
 
 export class Module {
-    public static readonly tableName = 'modules';
-    public static readonly jobModuleMapName = 'modules_jobs';
+    public static readonly tableName = "modules";
+    public static readonly jobModuleMapName = "modules_jobs";
 
     public static readonly queries = {
         associateJob: `INSERT into ${Module.jobModuleMapName} (
@@ -14,17 +14,21 @@ export class Module {
         createModule: `INSERT into ${Module.tableName}(
             wt_name, client_id
         ) VALUES($1, $2) returning *`,
-        getByClientAndName: `SELECT * FROM ${Module.tableName} WHERE client_id=$1 AND wt_name=$2`,
+        getByClientAndName: `SELECT * FROM ${
+            Module.tableName
+        } WHERE client_id=$1 AND wt_name=$2`,
         getById: `SELECT * from ${Module.tableName} WHERE id=$1`,
         queryJobs: `SELECT * from ${Module.jobModuleMapName} WHERE id=$1`,
-        updateHash: `UPDATE ${Module.tableName} SET dependency_file_hash=$2 WHERE id=$1`,
+        updateHash: `UPDATE ${
+            Module.tableName
+        } SET dependency_file_hash=$2 WHERE id=$1`
     };
 
     public static readonly overrideMap = Object.freeze({
-        'client_id': 'clientId',
-        'dependency_file_hash': 'dependencyFileHash',
-        'modules_status': 'status',
-        'wt_name': 'wtName',
+        client_id: "clientId",
+        dependency_file_hash: "dependencyFileHash",
+        modules_status: "status",
+        wt_name: "wtName"
     });
 
     public static async getById(id: string, instance: TransOrDB) {
@@ -35,17 +39,29 @@ export class Module {
         return new Module(result.rows[0]);
     }
 
-    public static async getByClientAndName(clientId: string, wtName: string, instance: TransOrDB) {
-        const result = await instance.query(Module.queries.getByClientAndName, [clientId, wtName]);
+    public static async getByClientAndName(
+        clientId: string,
+        wtName: string,
+        instance: TransOrDB
+    ) {
+        const result = await instance.query(Module.queries.getByClientAndName, [
+            clientId,
+            wtName
+        ]);
         if (!result.rowCount) {
             return null;
         }
         return new Module(result.rows[0]);
     }
 
-    public static async create(clientId: string, wtName: string, instance: TransOrDB) {
+    public static async create(
+        clientId: string,
+        wtName: string,
+        instance: TransOrDB
+    ) {
         const result = await instance.query(Module.queries.createModule, [
-            wtName, clientId
+            wtName,
+            clientId
         ]);
         if (!result.rowCount) {
             return null;
@@ -67,15 +83,20 @@ export class Module {
     }
 
     public async addDeploymentJob(jobId: number, instance: TransOrDB) {
-        const result = await instance.query(Module.queries.associateJob, [this.id, jobId]);
+        const result = await instance.query(Module.queries.associateJob, [
+            this.id,
+            jobId
+        ]);
         if (result.rowCount === 0) {
-            throw new Error('Unable to insert into table');
+            throw new Error("Unable to insert into table");
         }
         return result.rows[0];
     }
 
     public async listDeploymentJobs(instance: TransOrDB) {
-        const result = await instance.query(Module.queries.queryJobs, [this.id]);
+        const result = await instance.query(Module.queries.queryJobs, [
+            this.id
+        ]);
         return result.rows.map(jobData => new Job(jobData));
     }
 }

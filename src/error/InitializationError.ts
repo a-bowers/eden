@@ -1,2 +1,1 @@
-export class InitializationError extends Error {
-}
+export class InitializationError extends Error {}
