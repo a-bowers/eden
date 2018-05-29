@@ -28,7 +28,7 @@ export async function install(directory: string, dependencyFile: string) {
     await writeFileAsync(requirementsFilePath, dependencyFile, {
         encoding: "utf8"
     });
-    return execAsync(`pip install -r ../requirements.txt`, {
-        cwd: join(directory, "bin")
+    return execAsync(`./bin/pip install -r ./requirements.txt`, {
+        cwd: join(directory)
     });
 }
