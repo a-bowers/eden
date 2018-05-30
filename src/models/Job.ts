@@ -41,7 +41,8 @@ const overridesMap = {
     retries_remaining: "retriesRemaining",
     run_after_timestamp: "runAfter",
     submitted_at: "submittedAt",
-    updated_at: "updatedAt"
+    updated_at: "updatedAt",
+    started_at: "startedAt"
 };
 
 export default class Job {
@@ -70,6 +71,7 @@ export default class Job {
     public readonly id!: number;
     public readonly type!: string;
     public readonly metadata!: any;
+    public readonly startedAt!: Date;
 
     public status!: JOB_STATUSES;
     public retriesRemaining!: number;

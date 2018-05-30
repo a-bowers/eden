@@ -13,7 +13,10 @@ export type JobHandler = (metadata: any) => Promise<boolean>;
 export class Queue {
     private jobMap = new Map<string, JobHandler>();
     private current = 0;
-    public constructor(public readonly maxConcurrency: number = 5) {
+    public constructor(
+        public readonly maxConcurrency: number = 5,
+        public readonly timeout: number = 120 //Timeout for jobs in seconds
+    ) {
         this.handleNotification = this.handleNotification.bind(this);
         // Ugly hack is needed as upstream type do not support notification
         // event type
@@ -66,19 +69,28 @@ export class Queue {
                     break;
                 }
 
-                try {
-                    const completed = await handler(job.metadata);
-                    job.status = completed ? "completed" : "failed";
-                } catch (e) {
-                    if (job.retriesRemaining > 0) {
-                        job.status = "waiting";
-                        job.retriesRemaining--;
-                        // Exponential back-off
-                        job.runAfter = new Date(
-                            job.runAfter.getTime() + ms("10m")
-                        );
-                    } else {
+                if(job.startedAt) {
+                    if(Date.now() - job.startedAt.getTime() > this.timeout*1000){
                         job.status = "failed";
+                        //TODO clean up workers and things
+                    }
+                }
+                
+                if(job.status != "failed") {
+                    try {
+                        const completed = await handler(job.metadata);
+                        job.status = completed ? "completed" : "failed";
+                    } catch (e) {
+                        if (job.retriesRemaining > 0) {
+                            job.status = "waiting";
+                            job.retriesRemaining--;
+                            // Exponential back-off
+                            job.runAfter = new Date(
+                                job.runAfter.getTime() + ms("10m")
+                            );
+                        } else {
+                            job.status = "failed";
+                        }
                     }
                 }
 

@@ -108,10 +108,10 @@ export async function provision(metadata: any) {
         await r;
         logger.debug("Upload complete");
         logger.info("Provisioning Complete");
-
         return true;
     } catch (err) {
         logger.info(err);
         logger.error("Failed to zip and upload modules to s3");
+        return false;
     }
 }
