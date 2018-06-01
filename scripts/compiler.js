@@ -32,16 +32,19 @@ module.exports.compile = async (options, cb) => {
         await fs.ensureDir(pyDir);
         await fs.writeFile(path.join(pyDir, pyHelperName), pyHelper);
         await fs.writeFile(path.join(pyDir, pyContextName), pyContext);
-        await fs.writeFile(path.join(pyDir, "webtaskContext.json"), JSON.stringify(_objectWithoutProperties(options, ["script"])));
+        //await fs.writeFile(path.join(pyDir, "webtaskContext.json"), JSON.stringify(_objectWithoutProperties(options, ["script"])));
 
-        if(simple || test){
+        if(simple){
             await fs.writeFile(path.join(pyDir, userScriptName), options.script);
         } else {
             const buffer = Buffer.from(options.script);
-            if(buffer.toString('hex', 0, 2) === "1f8b") {
+            //if(buffer.toString('hex', 0, 2) === "1f8b") {
+            if(isGzip(buffer)) {
+                console.log("gzip");
                 const scriptStream = streamify.createReadStream(buffer);
                 await UnpackArchive(scriptStream, pyDir);
             } else {
+                console.log("string");
                 //TODO will have issues if the first multiline is not a requirements list (if not included)
                 const regex = /"""\n?([\s\S]*?)"""|'''\n?([\s\S]*)'''/;
                 var match = regex.exec(buffer.toString('ascii'));
@@ -55,6 +58,7 @@ module.exports.compile = async (options, cb) => {
         console.log("Main function is " + mainFunctionName);
     } catch(err) {
         console.log("Setup error: " + err);
+        return cb(err, null);
     }
 
     if(simple){
@@ -69,12 +73,13 @@ module.exports.compile = async (options, cb) => {
     try {
         const requirementsFilePath = path.join(pyDir, requirementsFileName);
         const requirements = await fs.readFile(requirementsFilePath, { encoding: 'ascii' });
-        var u = test ? "http://localhost:5000" : "https://example.com";
-        if(test)
-        const provisionerurl = urljoin(u, options.secrets.CLIENT_ID, name); //TODO URL
+        var u = test ? "http://localhost:3000/modules" : "https://example.com";
+        //const provisionerurl = urljoin(u, options.secrets.CLIENT_ID, name); //TODO URL
+        const provisionerurl = urljoin(u, "GaYHHN4KcoElIviUvyWfjhDqbFw29bo2", name);
         
-        var token = await GetAuthToken(options.secrets)
-        .catch((err) => { Promise.reject("Error getting auth token: " + err) });
+        //var token = await GetAuthToken(options.secrets)
+        //.catch((err) => { Promise.reject("Error getting auth token: " + err) });
+        var token = "eyJ0eXAiOiJKV1QiLCJhbGciOiJSUzI1NiIsImtpZCI6Ik5FTkNOemN5TVVKQlJFVkRNREUwUWpoRU1qQTFNVVZGT1VZNVJEWTVRVFpFUmpORE1URkZPQSJ9.eyJpc3MiOiJodHRwczovL2F1dGguZ29waC5tZS8iLCJzdWIiOiJHYVlISE40S2NvRWxJdmlVdnlXZmpoRHFiRncyOWJvMkBjbGllbnRzIiwiYXVkIjoiaHR0cHM6Ly9hcGkuZWRlbi5nb3BoLm1lLyIsImlhdCI6MTUyNzgyMzc5NywiZXhwIjoxNTI3OTEwMTk3LCJhenAiOiJHYVlISE40S2NvRWxJdmlVdnlXZmpoRHFiRncyOWJvMiIsInNjb3BlIjoicHJvdmlzaW9uOm1vZHVsZXMiLCJndHkiOiJjbGllbnQtY3JlZGVudGlhbHMifQ.LexcQJ6hdm2pr5LADWencUEpDw3440XjrFbxipAS-oKhliqJrkG5tfVyrLS2tfKnlbowsP1DhxKfnLdRHgZOvc4JItJ18U4o-hAGlBaeTYmrw8ejIBeRDtcE3i7c05q07j8lq75gcRgFaKDdXSY82MA7Fxyg-zN88zP9A_11cnlMRr8fIQffZpz2JjE4Bmy03nfzfavgu0a1UJ2E5ZZlwg67Uom8I0_xV-9ayRx4AAeX3EpM77805y-oDbTIcibNP3l0WWRjhxknCto7fpvUCWv5R_vBLDVE1vCL9KIYfkt4zW5KZm9ByCJty8uLyohA1dFZoRqep9owDD73rDQgkA";
 
         const requestData = {
             wtName: name,
@@ -82,16 +87,16 @@ module.exports.compile = async (options, cb) => {
             dependencyFile: requirements
         }
 
-        const options = {
+        const libOptions = {
             url: provisionerurl,
             json: requestData,
             headers: {
                 Authorization: 'Bearer ' + token
             }
         }
-        const provRes = await GetPythonLibrary(options, pyDir)
+        const provRes = await GetPythonLibrary(libOptions, pyDir)
         .catch((err) => {
-            if(provRes.statusCode && provRes.statusCode === 404) Promise.reject("Provisioning in progress.");
+            if(err.statusCode && err.statusCode === 404) Promise.reject("Provisioning in progress.");
             else Promise.reject("Error starting provisioner: " + err)
         });;
     } catch(err) {
@@ -169,6 +174,14 @@ function _objectWithoutProperties(obj, keys) {
     return target;
 }
 
+function isGzip(buf) {
+	if (!buf || buf.length < 3) {
+		return false;
+	}
+
+	return buf[0] === 0x1F && buf[1] === 0x8B && buf[2] === 0x08;
+};
+
 function StartPythonServer(name) {
     return new Promise ((resolve, reject) => {
         const pyDir = path.join(os.tmpdir(), name); //use uuid?
@@ -240,7 +253,7 @@ with open(os.path.join(os.path.dirname(os.path.abspath(__file__)), 'webtaskConte
 function RunPython(context, req, res) {
     proxy.web(req, res);
 }
-```
+`
 function RunPython(context, req, res) {
     ymir.load('module').function(context, req, res); //wsgi form, have way to call function from string?
-}```
+}`
