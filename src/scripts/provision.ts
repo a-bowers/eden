@@ -24,7 +24,7 @@ async function installModules(
     if (lang.setup) {
         logger.info("Setting up environment");
         const responseFromSetup = await lang.setup(directory, dependencyFile)
-        .catch(err => {throw err.stderr});
+        .catch(err => { throw err.stderr ? err.stderr : err.toString(); });
         logger.debug("Setting up environment finished with", responseFromSetup);
         logger.info("Environment set up");
     }
@@ -32,7 +32,7 @@ async function installModules(
     logger.info("Starting to install modules");
     logger.debug("dependencyFile ->", dependencyFile);
     const responseFromInstall = await lang.install(directory, dependencyFile)
-    .catch(err => {throw err.stderr});
+    .catch(err => { throw err.stderr ? err.stderr : err.toString(); });
     logger.debug("installing finished", responseFromInstall);
     logger.info("Modules successfully installed");
 }
