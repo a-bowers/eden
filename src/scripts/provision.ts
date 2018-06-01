@@ -23,16 +23,22 @@ async function installModules(
 
     if (lang.setup) {
         logger.info("Setting up environment");
-        const responseFromSetup = await lang.setup(directory, dependencyFile)
-        .catch(err => { throw err.stderr ? err.stderr : err.toString(); });
+        const responseFromSetup = await lang
+            .setup(directory, dependencyFile)
+            .catch(err => {
+                throw err.stderr ? err.stderr : err.toString();
+            });
         logger.debug("Setting up environment finished with", responseFromSetup);
         logger.info("Environment set up");
     }
 
     logger.info("Starting to install modules");
     logger.debug("dependencyFile ->", dependencyFile);
-    const responseFromInstall = await lang.install(directory, dependencyFile)
-    .catch(err => { throw err.stderr ? err.stderr : err.toString(); });
+    const responseFromInstall = await lang
+        .install(directory, dependencyFile)
+        .catch(err => {
+            throw err.stderr ? err.stderr : err.toString();
+        });
     logger.debug("installing finished", responseFromInstall);
     logger.info("Modules successfully installed");
 }
@@ -79,7 +85,7 @@ async function zipModules(
 
 export async function provision(metadata: any) {
     const { dependencyFile, form, envUrl, language } = metadata;
-    
+
     await ensureDir(envUrl);
 
     try {

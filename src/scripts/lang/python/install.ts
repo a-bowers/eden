@@ -28,6 +28,11 @@ export async function install(directory: string, dependencyFile: string) {
     await writeFileAsync(requirementsFilePath, dependencyFile, {
         encoding: "utf8"
     });
+    if(process.platform === "win32") {
+        return execAsync(`.\\Scripts\\pip install -r .\\requirements.txt`, {
+            cwd: join(directory)
+        });
+    }
     return execAsync(`./bin/pip install -r ./requirements.txt`, {
         cwd: join(directory)
     });

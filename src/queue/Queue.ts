@@ -69,15 +69,18 @@ export class Queue {
                     break;
                 }
 
-                if(job.startedAt) {
-                    if(Date.now() - job.startedAt.getTime() > this.timeout*1000){
+                if (job.startedAt) {
+                    if (
+                        Date.now() - job.startedAt.getTime() >
+                        this.timeout * 1000
+                    ) {
                         job.status = "failed";
                         job.statusDescription = "Timeout";
                         //TODO clean up workers and things
                     }
                 }
-                
-                if(job.status != "failed") {
+
+                if (job.status != "failed") {
                     try {
                         const result = await handler(job.metadata);
                         job.status = result.completed ? "completed" : "failed";
