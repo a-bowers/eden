@@ -23,14 +23,16 @@ async function installModules(
 
     if (lang.setup) {
         logger.info("Setting up environment");
-        const responseFromSetup = await lang.setup(directory, dependencyFile);
+        const responseFromSetup = await lang.setup(directory, dependencyFile)
+        .catch(err => {throw err.stderr});
         logger.debug("Setting up environment finished with", responseFromSetup);
         logger.info("Environment set up");
     }
 
     logger.info("Starting to install modules");
     logger.debug("dependencyFile ->", dependencyFile);
-    const responseFromInstall = await lang.install(directory, dependencyFile);
+    const responseFromInstall = await lang.install(directory, dependencyFile)
+    .catch(err => {throw err.stderr});
     logger.debug("installing finished", responseFromInstall);
     logger.info("Modules successfully installed");
 }
@@ -77,7 +79,7 @@ async function zipModules(
 
 export async function provision(metadata: any) {
     const { dependencyFile, form, envUrl, language } = metadata;
-
+    
     await ensureDir(envUrl);
 
     try {
@@ -85,7 +87,7 @@ export async function provision(metadata: any) {
         await installModules(language, envUrl, dependencyFile);
     } catch (err) {
         logger.error("Failed to install modules", err);
-        return false;
+        return { completed: false, description: err };
     }
 
     try {
@@ -108,10 +110,10 @@ export async function provision(metadata: any) {
         await r;
         logger.debug("Upload complete");
         logger.info("Provisioning Complete");
-        return true;
+        return { completed: true, description: null };
     } catch (err) {
         logger.info(err);
         logger.error("Failed to zip and upload modules to s3");
-        return false;
+        return { completed: false, description: err };
     }
 }

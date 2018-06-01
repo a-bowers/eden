@@ -8,7 +8,7 @@ import createLogger from "../logger";
 import Job from "../models/Job";
 
 const logger = createLogger("queue");
-export type JobHandler = (metadata: any) => Promise<boolean>;
+export type JobHandler = (metadata: any) => Promise<any>;
 
 export class Queue {
     private jobMap = new Map<string, JobHandler>();
@@ -72,14 +72,16 @@ export class Queue {
                 if(job.startedAt) {
                     if(Date.now() - job.startedAt.getTime() > this.timeout*1000){
                         job.status = "failed";
+                        job.statusDescription = "Timeout";
                         //TODO clean up workers and things
                     }
                 }
                 
                 if(job.status != "failed") {
                     try {
-                        const completed = await handler(job.metadata);
-                        job.status = completed ? "completed" : "failed";
+                        const result = await handler(job.metadata);
+                        job.status = result.completed ? "completed" : "failed";
+                        job.statusDescription = result.description;
                     } catch (e) {
                         if (job.retriesRemaining > 0) {
                             job.status = "waiting";

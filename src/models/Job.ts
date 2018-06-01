@@ -33,7 +33,8 @@ const UPDATE_JOB_STATUS_SCRIPT = q(`
         status=$2,
         retries_remaining=$3,
         updated_at=to_timestamp($4),
-        run_after_timestamp=$5
+        run_after_timestamp=$5,
+        status_description=$6
     WHERE id = $1
 `);
 
@@ -42,7 +43,8 @@ const overridesMap = {
     run_after_timestamp: "runAfter",
     submitted_at: "submittedAt",
     updated_at: "updatedAt",
-    started_at: "startedAt"
+    started_at: "startedAt",
+    status_description: "statusDescription"
 };
 
 export default class Job {
@@ -74,6 +76,7 @@ export default class Job {
     public readonly startedAt!: Date;
 
     public status!: JOB_STATUSES;
+    public statusDescription!: string;
     public retriesRemaining!: number;
     public runAfter!: Date;
 
@@ -87,7 +90,8 @@ export default class Job {
             this.status,
             this.retriesRemaining,
             Date.now() / 1000.0,
-            this.runAfter
+            this.runAfter,
+            this.statusDescription
         ]);
 
         if (!result.rowCount) {
