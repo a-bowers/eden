@@ -55,7 +55,7 @@ async function zipModules(
     // setup STS tokens for this stuff or write
     // a streaming uploader for postUrls so.. meh
     // The SSD is acting like a concat stream here
-    const archPath = path.join(directory, 'archive.tar.gz');
+    const archPath = path.join(directory, "archive.tar.gz");
     const promise = new Promise<string>((resolve, reject) => {
         arch.on("warning", err => {
             if (err.code === "ENOENT") {
@@ -94,15 +94,15 @@ export async function provision(metadata: any) {
         logger.info("Fetching complete starting to zip");
         const arch = await zipModules(language, envUrl, dependencyFile);
 
-        const {url, fields} = form;
+        const { url, fields } = form;
         logger.debug("Archival Complete Starting to Upload to ", url);
 
         const r = request.post({
             formData: {
                 ...fields,
-                file: createReadStream(arch),
+                file: createReadStream(arch)
             },
-            url// : 'http://localhost:3500',
+            url // : 'http://localhost:3500',
         });
 
         // createReadStream(arch).pipe(r);

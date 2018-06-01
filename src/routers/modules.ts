@@ -120,7 +120,7 @@ async function provisionModule(
             Bucket: AWS_S3_BUCKET,
             Expires: AWS_POST_EXPIRY,
             Fields: {
-                Key: s3Path,
+                Key: s3Path
             }
         });
 
@@ -129,7 +129,7 @@ async function provisionModule(
             dependencyFile,
             envUrl,
             form,
-            language,
+            language
         });
 
         // @TODO add Job Deployement Request to Module
