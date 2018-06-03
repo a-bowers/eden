@@ -75,7 +75,7 @@ async function provisionModule(
 
     try {
         logger.debug("Checking for Deployed version in Database");
-        let mod = await Module.getByClientAndName(
+        let mod: Module | null = await Module.getByClientAndName(
             clientId,
             wtName,
             transaction
@@ -85,7 +85,7 @@ async function provisionModule(
 
         // Check if module exists and if so,
         // redirect immediately
-        if (mod && mod.dependencyFileHash === hashedRequirements) {
+        if (mod && mod.dependencyFileHash === hashedRequirements && mod.status === 'provisioned') {
             logger.debug("Creating an S3 signed Get URL");
             // If this is not working please refer to
             // https://stackoverflow.com/questions/38831829/nodejs-aws-sdk-s3-generate-presigned-url
@@ -96,6 +96,7 @@ async function provisionModule(
             });
 
             logger.info("Request redirected to S3");
+            logger.debug(getUrl);
             return res.redirect(getUrl);
         }
 
@@ -125,12 +126,15 @@ async function provisionModule(
         });
 
         // Publish a JOB Request
-        const jobId = await queue.publish("provision", {
+        const job = await queue.publish("provision", {
+            dependencyFileHash: hashedRequirements,
             dependencyFile,
             envUrl,
             form,
             language
         });
+        await mod.updateDeploymentHash(hashedRequirements, transaction);
+        await mod.addDeploymentJob(job, transaction);
 
         // @TODO add Job Deployement Request to Module
         transaction.commit();

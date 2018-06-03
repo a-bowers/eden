@@ -21,7 +21,13 @@ export class Module {
         queryJobs: `SELECT * from ${Module.jobModuleMapName} WHERE id=$1`,
         updateHash: `UPDATE ${
             Module.tableName
-        } SET dependency_file_hash=$2 WHERE id=$1`
+        } SET dependency_file_hash=$2, modules_status='provisioning' WHERE id=$1`,
+        updateStatus: `UPDATE ${Module.tableName} SET modules_status=$3 WHERE 
+            id = (
+                SELECT module_id from ${Module.jobModuleMapName} 
+                WHERE job_id=$1
+            )
+        AND dependency_file_hash=$2`,
     };
 
     public static readonly overrideMap = Object.freeze({
@@ -64,9 +70,22 @@ export class Module {
             clientId
         ]);
         if (!result.rowCount) {
-            return null;
+            throw new Error('Failed to create a module.');
         }
         return new Module(result.rows[0]);
+    }
+
+    public static async updateStatus(
+        jobId: number,
+        hash: string,
+        didItComplete: boolean,
+        instance: TransOrDB
+    ) {
+        const result = await instance.query(Module.queries.updateStatus, [
+            jobId,
+            hash,
+            (didItComplete ? 'provisioned' : 'provisioning_failed')
+        ]);
     }
 
     public readonly id!: number;
@@ -82,10 +101,10 @@ export class Module {
         Object.assign(this, dbToProp(row, Module.overrideMap));
     }
 
-    public async addDeploymentJob(jobId: number, instance: TransOrDB) {
+    public async addDeploymentJob(job: Job, instance: TransOrDB) {
         const result = await instance.query(Module.queries.associateJob, [
             this.id,
-            jobId
+            job.id
         ]);
         if (result.rowCount === 0) {
             throw new Error("Unable to insert into table");
@@ -98,5 +117,19 @@ export class Module {
             this.id
         ]);
         return result.rows.map(jobData => new Job(jobData));
+    }
+
+    public async updateDeploymentHash(hash: string, instance: TransOrDB) {
+        const result = await instance.query(Module.queries.updateHash, [
+            this.id, 
+            hash
+        ]);
+        if (result.rowCount === 0){
+            throw new Error('Unable to update hash');
+        }
+        if (result.rowCount > 1) {
+            throw new Error('Hey you, release!! (You just nuked the database))');
+        }
+        this.dependencyFileHash = hash;
     }
 }

@@ -7,6 +7,7 @@
   },
   "scripts": {
     "test": "echo \"Error: no test specified\" && exit 1",
+    "compiler": "nodemon --exec \"wt serve --port 8080\" ./scripts/supercompiler.js",
     "dev": "nodemon --exec ts-node ./src/index.ts",
     "app": "nodemon ./lib/index.ts",
     "clean": "rimraf lib && rimraf coverage",
@@ -15,8 +16,6 @@
     "prepublish": "npm run build",
     "prebuild": "npm run clean && npm run format && npm run lint && echo Using TypeScript && tsc --version",
     "build": "tsc --pretty",
-    "limitd": "limitd",
-    "limitctl": "limitctl",
     "dumphttp": "node ./scripts/dumphttp.js"
   },
   "repository": {
@@ -55,6 +54,7 @@
     "chokidar": "^2.0.3",
     "connect-ensure-permissions": "0.0.1",
     "debug": "^3.1.0",
+    "decompress-targz": "^4.1.1",
     "dotenv": "^5.0.1",
     "express": "^4.16.3",
     "express-jwt": "^5.3.1",
@@ -72,10 +72,12 @@
     "request-promise": "^4.2.2",
     "request-promise-native": "^1.0.5",
     "streamifier": "^0.1.1",
+    "tar": "^4.4.4",
     "tar-fs": "^1.16.0",
     "url-join": "^4.0.0",
     "uuid": "^3.2.1",
-    "yargs": "^11.0.0"
+    "yargs": "^11.0.0",
+    "ymir": "file:../ymir"
   },
   "devDependencies": {
     "@types/chalk": "^2.2.0",
@@ -87,11 +89,13 @@
     "@types/typescript": "^2.0.0",
     "db-migrate": "^0.11.1",
     "db-migrate-pg": "^0.4.0",
-    "nodemon": "^1.17.3",
+    "nodemon": "^1.17.5",
     "prettier": "^1.13.3",
     "ts-node": "^6.0.0",
     "tslint": "^5.9.1",
     "tslint-config-prettier": "^1.12.0",
-    "typescript": "^2.8.3"
+    "typescript": "^2.8.3",
+    "webtask-tools": "^3.2.1",
+    "wt-cli": "^9.5.0"
   }
 }

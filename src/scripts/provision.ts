@@ -10,6 +10,8 @@ import { promisify } from "util";
 import env from "../env";
 import createLogger from "../logger";
 import { loadLanguage } from "./language";
+import { Transaction } from "../db/Transaction";
+import { Module } from "../models/Module";
 
 const logger = createLogger("provisioner");
 const execAsync = promisify(exec);
@@ -83,18 +85,22 @@ async function zipModules(
     return promise;
 }
 
-export async function provision(metadata: any) {
-    const { dependencyFile, form, envUrl, language } = metadata;
+export async function provision(metadata: any, transaction: Transaction) {
+    const { dependencyFileHash, dependencyFile, form, envUrl, language } = metadata;
 
     await ensureDir(envUrl);
 
+
+    // @TODO: CLEAN DA MESS LATAH!
+    
     try {
         logger.info("Fetching modules");
         await installModules(language, envUrl, dependencyFile);
     } catch (err) {
         logger.error("Failed to install modules", err);
+        await Module.updateStatus(metadata.job_id, dependencyFileHash, false, transaction);
         return { completed: false, description: err };
-    }
+    } 
 
     try {
         logger.info("Fetching complete starting to zip");
@@ -116,10 +122,13 @@ export async function provision(metadata: any) {
         await r;
         logger.debug("Upload complete");
         logger.info("Provisioning Complete");
+
+        await Module.updateStatus(metadata.job_id, dependencyFileHash, true, transaction);
         return { completed: true, description: null };
     } catch (err) {
         logger.info(err);
         logger.error("Failed to zip and upload modules to s3");
+        await Module.updateStatus(metadata.job_id, dependencyFileHash, false, transaction);
         return { completed: false, description: err };
     }
 }

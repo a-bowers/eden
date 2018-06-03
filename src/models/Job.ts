@@ -65,7 +65,7 @@ export default class Job {
     ) {
         const result = await transaction.query(CREATE_SCRIPT, [type, metadata]);
         if (!result.rowCount) {
-            return null;
+            throw new Error('Failed to create a job in table');
         }
         return new Job(result.rows[0]);
     }

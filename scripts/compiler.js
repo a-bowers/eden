@@ -1,73 +1,54 @@
 const os = require('os');
 const path = require('path');
-const net = require('net');
 const urljoin = require('url-join');
 const md5 = require('md5');
 const rp = require('request');
 const fs = require('fs-extra');
 const streamify = require('streamifier');
-const gunzip = require('gunzip-maybe');
 const uuid = require('uuid').v4;
-const pump = require('pump');
-const tar = require('tar-fs');
-const pythonShell = require('python-shell');
-const httpProxy = require('http-proxy');
+const ymir = require('ymir');
+const webtask = require('webtask-tools');
+const tar = require('tar');
 
-const port = 3336;
-var mainFunctionName = "Main";
-const pyHelperName = "helper.py";
-const pyContextName = "wtcontext.py";
-const userScriptName = "script.py"; //Make sure these two bottom names are maintained by the cli
+const python = ymir.default;
+const sys = python.import('sys');
+
+var mainFunctionName = "app";
+const userModule = "script";
+const userScriptName = `${userModule}.py`; //Make sure these two bottom names are maintained by the cli
 const requirementsFileName = "requirements.txt";
 
-const proxy = httpProxy.createProxyServer({ target: 'http://127.0.0.1:' + port });//{ socketPath: "./tmp/wsgi.socket" } });
-
 module.exports.compile = async (options, cb) => {
+    // 
     const name = options.meta.name;
-    const pyDir = path.join(os.tmpdir(), name); //TODO put in subdirectory?
-    const simple = options.meta.simple;
+    const pyDir = path.join(os.tmpdir(), name);
     const test = options.meta.test;
+
+    console.log(pyDir);
 
     try { //set up directory and extract requirements, script, and main function name from options.script
         await fs.ensureDir(pyDir);
-        await fs.writeFile(path.join(pyDir, pyHelperName), pyHelper);
-        await fs.writeFile(path.join(pyDir, pyContextName), pyContext);
         //await fs.writeFile(path.join(pyDir, "webtaskContext.json"), JSON.stringify(_objectWithoutProperties(options, ["script"])));
 
-        if(simple){
-            await fs.writeFile(path.join(pyDir, userScriptName), options.script);
+        const buffer = Buffer.from(options.script);
+        //if(buffer.toString('hex', 0, 2) === "1f8b") {
+        if(isGzip(buffer)) {
+            const scriptStream = streamify.createReadStream(buffer);
+            await UnpackArchive(scriptStream, pyDir);
         } else {
-            const buffer = Buffer.from(options.script);
-            //if(buffer.toString('hex', 0, 2) === "1f8b") {
-            if(isGzip(buffer)) {
-                console.log("gzip");
-                const scriptStream = streamify.createReadStream(buffer);
-                await UnpackArchive(scriptStream, pyDir);
-            } else {
-                console.log("string");
-                //TODO will have issues if the first multiline is not a requirements list (if not included)
-                const regex = /"""\n?([\s\S]*?)"""|'''\n?([\s\S]*)'''/;
-                var match = regex.exec(buffer.toString('ascii'));
-                await fs.writeFile(path.join(pyDir, requirementsFileName), match[1] === "" ? match[2] : match [1]);
-                await fs.writeFile(path.join(pyDir, userScriptName), match.input.substring(match.index + match[0].length));
-            }
+            //TODO will have issues if the first multiline is not a requirements list (if not included)
+            const regex = /"""\n?([\s\S]*?)"""|'''\n?([\s\S]*)'''/;
+            var match = regex.exec(buffer.toString('ascii'));
+            await fs.writeFile(path.join(pyDir, requirementsFileName), match[1] === "" ? match[2] : match [1]);
+            await fs.writeFile(path.join(pyDir, userScriptName), match.input.substring(match.index + match[0].length));
         }
 
-        if(options.meta.main)
+        if(options.meta.main) {
             mainFunctionName = options.meta.main;
-        console.log("Main function is " + mainFunctionName);
-    } catch(err) {
-        console.log("Setup error: " + err);
-        return cb(err, null);
-    }
-
-    if(simple){
-        try{
-            await StartPythonServer(name);
-        } catch(err) {
-            console.log("Server error: " + err);
         }
-        return cb(null, RunPython) //Compiler done, pass the new webtask function back
+
+    } catch(err) {
+        return cb(err, null);
     }
 
     try {
@@ -77,10 +58,8 @@ module.exports.compile = async (options, cb) => {
         //const provisionerurl = urljoin(u, options.secrets.CLIENT_ID, name); //TODO URL
         const provisionerurl = urljoin(u, "GaYHHN4KcoElIviUvyWfjhDqbFw29bo2", name);
         
-        //var token = await GetAuthToken(options.secrets)
-        //.catch((err) => { Promise.reject("Error getting auth token: " + err) });
-        var token = "eyJ0eXAiOiJKV1QiLCJhbGciOiJSUzI1NiIsImtpZCI6Ik5FTkNOemN5TVVKQlJFVkRNREUwUWpoRU1qQTFNVVZGT1VZNVJEWTVRVFpFUmpORE1URkZPQSJ9.eyJpc3MiOiJodHRwczovL2F1dGguZ29waC5tZS8iLCJzdWIiOiJHYVlISE40S2NvRWxJdmlVdnlXZmpoRHFiRncyOWJvMkBjbGllbnRzIiwiYXVkIjoiaHR0cHM6Ly9hcGkuZWRlbi5nb3BoLm1lLyIsImlhdCI6MTUyNzgyMzc5NywiZXhwIjoxNTI3OTEwMTk3LCJhenAiOiJHYVlISE40S2NvRWxJdmlVdnlXZmpoRHFiRncyOWJvMiIsInNjb3BlIjoicHJvdmlzaW9uOm1vZHVsZXMiLCJndHkiOiJjbGllbnQtY3JlZGVudGlhbHMifQ.LexcQJ6hdm2pr5LADWencUEpDw3440XjrFbxipAS-oKhliqJrkG5tfVyrLS2tfKnlbowsP1DhxKfnLdRHgZOvc4JItJ18U4o-hAGlBaeTYmrw8ejIBeRDtcE3i7c05q07j8lq75gcRgFaKDdXSY82MA7Fxyg-zN88zP9A_11cnlMRr8fIQffZpz2JjE4Bmy03nfzfavgu0a1UJ2E5ZZlwg67Uom8I0_xV-9ayRx4AAeX3EpM77805y-oDbTIcibNP3l0WWRjhxknCto7fpvUCWv5R_vBLDVE1vCL9KIYfkt4zW5KZm9ByCJty8uLyohA1dFZoRqep9owDD73rDQgkA";
-
+        var token = (await GetAuthToken(options.secrets)).access_token;
+        
         const requestData = {
             wtName: name,
             language: 'python',
@@ -92,67 +71,72 @@ module.exports.compile = async (options, cb) => {
             json: requestData,
             headers: {
                 Authorization: 'Bearer ' + token
+            },
+            followAllRedirects: true,
+            followRedirect: function(statusCode) {
+                return true;
             }
+        };
+
+        if (!await Provision(libOptions, pyDir)) {
+            return cb(new Error('Please wait modules are still provisioning'));
         }
-        const provRes = await GetPythonLibrary(libOptions, pyDir)
-        .catch((err) => {
-            if(err.statusCode && err.statusCode === 404) Promise.reject("Provisioning in progress.");
-            else Promise.reject("Error starting provisioner: " + err)
-        });;
     } catch(err) {
         return cb(err, null) //Provisioning is ongoing or something else went wrong with the s3 call
     }
 
-    try{
-        await StartPythonServer(name);
-    } catch(err) {
-        console.log("Server error: " + err);
-    }
+    sys.path.append(pyDir);
+
+    const scriptFileNameFull = `${userModule}:${mainFunctionName}`;
+    const RunPython = webtask.fromExpress(ymir.middleware(scriptFileNameFull));
+
     return cb(null, RunPython) //Compiler done, pass the new webtask function back
 };
 
-function UnpackArchive(srcStream, dest) {
-    return new Promise((resolve, reject) => {
-        const untar = tar.extract(dest);
-        const unzip = gunzip();
 
-        pump(srcStream, unzip, untar, (err) => {
-            if(err) {
-                reject("Error unpacking: " + err);
-            } else {
-                resolve();
-            }
+function extract(request, dest) {
+    return new Promise((resolve, reject) => {
+        const ext = tar.extract({
+            gzip: true,
+            cwd: dest// alias for cwd:'some-dir', also ok
         });
+    
+        request.pipe(ext);
+        ext.on('finish', () => resolve(true));
+        ext.on('error', reject);    
     });
 }
 
-function GetPythonLibrary(options, dest) {
+function Provision(options, dest) {
     return new Promise ((resolve, reject) => {
-        try {
-            rp.post(options, async (err, res, body) => {
-                if(err) return reject(err);
-                if(res.statusCode === 200) {
-                    await UnpackArchive(req, dest).then(resolve());
-                    return resolve(res);
-                }
-                return reject(res);
-            });
-        } catch(err) {
-            reject(err);
-        }
+        const r = rp.post(options);
+
+        const t = extract(r, dest);
+
+        r.on('error', reject);
+        r.on('response', async (res) => {
+            if (res.statusCode === 201) {
+                return resolve(false);
+            }
+            
+            if (res.statusCode === 200) {
+                return resolve(t);
+            }
+            return reject(res);
+        });
     });
 }
 
 function GetAuthToken(secrets) {
     return new Promise ((resolve, reject) => {
         var options = {
-            url: urljoin("https://", secrets.AUTH_DOMAIN, "/oauth/token"),
+            url: urljoin("https://", secrets.AUTH0_DOMAIN, "/oauth/token"),
             headers: { "content-type": "application/json" },
             body: {
                 grant_type: "client_credentials",
                 client_id: secrets.CLIENT_ID,
                 client_secret: secrets.CLIENT_SECRET,
-                audience: secrets.API_ID
+                audience: secrets.AUTH0_AUDIENCE
             },
             json: true
         };
@@ -181,79 +165,3 @@ function isGzip(buf) {
 
 	return buf[0] === 0x1F && buf[1] === 0x8B && buf[2] === 0x08;
 };
-
-function StartPythonServer(name) {
-    return new Promise ((resolve, reject) => {
-        const pyDir = path.join(os.tmpdir(), name); //use uuid?
-        var options = {
-            scriptPath: pyDir,
-            pythonOptions: ["-u", "-W ignore"],
-            args: [pyDir, port, path.join(pyDir, userScriptName), mainFunctionName]
-        };
-        var py = new pythonShell(pyHelperName, options);
-        py.on('message', (message) => { 
-            console.log(message);
-            if(message === "Python server ready") {
-                resolve();
-            }
-        });
-        py.end(function (err, code, signal) {
-            console.log('The exit code was: ' + code);
-            console.log('The exit signal was: ' + signal);
-            console.log('Server shut down');
-            if (err) return reject(err);
-        });
-    });
-}
-
-const pyHelper = `
-import sys
-import imp
-from wsgiref.simple_server import make_server
-
-dir = sys.argv[1]
-port = int(sys.argv[2])
-scriptPath = sys.argv[3]
-
-sys.path.append(dir)
-module = imp.load_source("webtaskScript", scriptPath)
-mainFunc = getattr(module, sys.argv[4])
-
-def ServeRequest(env, start_response):
-    print "Received {0} request".format(env["REQUEST_METHOD"])
-#   do fancy things
-
-    iterable = None
-    try:
-        iterable = mainFunc(env, start_response)
-        for data in iterable:
-            yield data
-    finally:
-        if hasattr(iterable, 'close'):
-            iterable.close()
-
-def StartServer(port):
-    print "Starting server"
-    httpd = make_server('', port, ServeRequest)
-    print "Python server ready"
-    httpd.serve_forever()
-
-StartServer(port)`;
-
-const pyContext = `
-import os
-import json
-
-context = None
-
-with open(os.path.join(os.path.dirname(os.path.abspath(__file__)), 'webtaskContext.json')) as f:
-    context = json.loads(f.read())`;
-
-//This is the new webtask function passed back from the compiler
-function RunPython(context, req, res) {
-    proxy.web(req, res);
-}
-`
-function RunPython(context, req, res) {
-    ymir.load('module').function(context, req, res); //wsgi form, have way to call function from string?
-}`

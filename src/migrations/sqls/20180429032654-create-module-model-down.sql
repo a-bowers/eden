@@ -1,3 +1,3 @@
-DROP TABLE module_jobs;
-DROP TABLE module;
-DROP ENUM module_status;
+DROP TABLE modules_jobs;
+DROP TABLE modules;
+DROP TYPE modules_status;

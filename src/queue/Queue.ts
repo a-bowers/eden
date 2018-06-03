@@ -8,7 +8,7 @@ import createLogger from "../logger";
 import Job from "../models/Job";
 
 const logger = createLogger("queue");
-export type JobHandler = (metadata: any) => Promise<any>;
+export type JobHandler = (metadata: any, transaction: Transaction) => Promise<any>;
 
 export class Queue {
     private jobMap = new Map<string, JobHandler>();
@@ -82,7 +82,12 @@ export class Queue {
 
                 if (job.status != "failed") {
                     try {
-                        const result = await handler(job.metadata);
+
+                        const result = await handler({
+                            ...job.metadata,
+                            job_id: job.id
+                        }, transaction);
+
                         job.status = result.completed ? "completed" : "failed";
                         job.statusDescription = result.description;
                     } catch (e) {
@@ -124,6 +129,7 @@ export class Queue {
     private handleNotification(msg: pg.Notification) {
         const { channel, payload } = msg;
         const jobName = channel.replace("pg_queue_simple_trigger_created_", "");
+        logger.debug("Received notification from PG", jobName);
         this.loop(jobName);
     }
 }
