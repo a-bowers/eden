@@ -5,60 +5,56 @@ const md5 = require('md5');
 const rp = require('request');
 const fs = require('fs-extra');
 const streamify = require('streamifier');
-const uuid = require('uuid').v4;
-const ymir = require('ymir');
 const webtask = require('webtask-tools');
 const tar = require('tar');
 
+const ymir = require('ymir');
 const python = ymir.default;
 const sys = python.import('sys');
 
 var mainFunctionName = "app";
-const userModule = "script";
-const userScriptName = `${userModule}.py`; //Make sure these two bottom names are maintained by the cli
+const pyContextName = "webtaskContext.json";
+const userModule = "script"; //Make sure these three bottom names are maintained by the CLI/user
+const userScriptFileName = `${userModule}.py`;
 const requirementsFileName = "requirements.txt";
 
 module.exports.compile = async (options, cb) => {
-    // 
+
     const name = options.meta.name;
     const pyDir = path.join(os.tmpdir(), name);
-    const test = options.meta.test;
+    const localTest = options.meta.test;
+    const secrets = options.secrets;
+    if(options.meta.main) {
+        mainFunctionName = options.meta.main;
+    }
 
-    console.log(pyDir);
-
-    try { //set up directory and extract requirements, script, and main function name from options.script
+    try { //set up directory and extract requirements and script from options.script
         await fs.ensureDir(pyDir);
-        //await fs.writeFile(path.join(pyDir, "webtaskContext.json"), JSON.stringify(_objectWithoutProperties(options, ["script"])));
+        await fs.writeFile(path.join(pyDir, pyContextName), pyContext);
 
         const buffer = Buffer.from(options.script);
-        //if(buffer.toString('hex', 0, 2) === "1f8b") {
         if(isGzip(buffer)) {
             const scriptStream = streamify.createReadStream(buffer);
-            await UnpackArchive(scriptStream, pyDir);
+            await extract(scriptStream, pyDir);
         } else {
             //TODO will have issues if the first multiline is not a requirements list (if not included)
             const regex = /"""\n?([\s\S]*?)"""|'''\n?([\s\S]*)'''/;
             var match = regex.exec(buffer.toString('ascii'));
             await fs.writeFile(path.join(pyDir, requirementsFileName), match[1] === "" ? match[2] : match [1]);
-            await fs.writeFile(path.join(pyDir, userScriptName), match.input.substring(match.index + match[0].length));
+            await fs.writeFile(path.join(pyDir, userScriptFileName), match.input.substring(match.index + match[0].length));
         }
-
-        if(options.meta.main) {
-            mainFunctionName = options.meta.main;
-        }
-
     } catch(err) {
+        console.log(JSON.stringify(err)); //TODO make nice error saying the requirements extraction failed
         return cb(err, null);
     }
 
     try {
         const requirementsFilePath = path.join(pyDir, requirementsFileName);
         const requirements = await fs.readFile(requirementsFilePath, { encoding: 'ascii' });
-        var u = test ? "http://localhost:3000/modules" : "https://example.com";
-        //const provisionerurl = urljoin(u, options.secrets.CLIENT_ID, name); //TODO URL
-        const provisionerurl = urljoin(u, "GaYHHN4KcoElIviUvyWfjhDqbFw29bo2", name);
+        var url = localTest ? "http://localhost:3000/modules" : urljoin("https://", secrets.AWS_S3_BUCKET, secrets.S3_PATH_PREFIX);
+        const provisionerurl = urljoin(url, secrets.CLIENT_ID, name);
         
-        var token = (await GetAuthToken(options.secrets)).access_token;
+        var token = (await GetAuthToken(secrets)).access_token;
         
         const requestData = {
             wtName: name,
@@ -82,13 +78,13 @@ module.exports.compile = async (options, cb) => {
             return cb(new Error('Please wait modules are still provisioning'));
         }
     } catch(err) {
-        return cb(err, null) //Provisioning is ongoing or something else went wrong with the s3 call
+        return cb(err, null) //Something else went wrong with the s3 call
     }
 
     sys.path.append(pyDir);
 
-    const scriptFileNameFull = `${userModule}:${mainFunctionName}`;
-    const RunPython = webtask.fromExpress(ymir.middleware(scriptFileNameFull));
+    const appNameFull = `${userModule}:${mainFunctionName}`;
+    const RunPython = webtask.fromExpress(ymir.middleware(appNameFull));
 
     return cb(null, RunPython) //Compiler done, pass the new webtask function back
 };
@@ -148,20 +144,19 @@ function GetAuthToken(secrets) {
     });
 }
 
-function _objectWithoutProperties(obj, keys) { 
-    var target = {};
-    for (var i in obj) {
-        if (keys.indexOf(i) >= 0) continue;
-        if (!Object.prototype.hasOwnProperty.call(obj, i)) continue;
-        target[i] = obj[i];
-    }
-    return target;
-}
-
 function isGzip(buf) {
 	if (!buf || buf.length < 3) {
 		return false;
-	}
+    }
 
-	return buf[0] === 0x1F && buf[1] === 0x8B && buf[2] === 0x08;
+	return buf[0] === 0x1F && buf[1] === 0x8B && buf[2] === 0x08; //Third byte signifies DEFLATE
 };
+
+const pyContext = `
+import os
+import json
+
+context = None
+
+with open(os.path.join(os.path.dirname(os.path.abspath(__file__)), '${pyContextName}')) as f:
+    context = json.loads(f.read())`;

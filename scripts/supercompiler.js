@@ -6,9 +6,8 @@ var path = require('path');
 var dotenv = require('dotenv');
 dotenv.load();
 
-// This allows wt-serve to work with this despite not having
-// compiler support locally, this shall forever be called 
-// wt-makeshift-compiler
+// This allows wt-serve to work with this despite not having compiler support locally,
+// it shall forever be called wt-makeshift-compiler
 let requestHandler = null;
 
 module.exports = function (ctx, req, res) {
@@ -27,11 +26,10 @@ module.exports = function (ctx, req, res) {
         takeRequest(ctx, req, res);
     }
 
-    // This tries to polyfill the options object expected
-    // expected by a wt-compiler on the cloud instance
+    //This tries to polyfill the options object expected by a wt-compiler on the cloud instance
     var options = {
         // Allow mocking a third party extension.
-        script: fs.readFileSync(path.join(__dirname, "./script.py")).toString('utf8'),
+        script: fs.readFileSync(path.join(__dirname, "./script.py")), //TODO don't hardcode this
         meta: {
             name: "edentest",
             main: "app",
@@ -40,7 +38,6 @@ module.exports = function (ctx, req, res) {
         },
         secrets: process.env
     };
-
 
     // If we already have the requestHandler "compiled" execute it.
     if (requestHandler !== null) {
