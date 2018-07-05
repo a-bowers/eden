@@ -13,7 +13,8 @@ const python = ymir.default;
 const sys = python.import('sys');
 
 var mainFunctionName = "app";
-const pyContextName = "webtaskContext.json";
+const pyContextScript = "wtcontext.py"
+const contextName = "webtaskContext.json";
 const userModule = "script"; //Make sure these three bottom names are maintained by the CLI/user
 const userScriptFileName = `${userModule}.py`;
 const requirementsFileName = "requirements.txt";
@@ -30,7 +31,8 @@ module.exports.compile = async (options, cb) => {
 
     try { //set up directory and extract requirements and script from options.script
         await fs.ensureDir(pyDir);
-        await fs.writeFile(path.join(pyDir, pyContextName), pyContext);
+        await fs.writeFile(path.join(pyDir, contextName), JSON.stringify(options.context));
+        await fs.writeFile(path.join(pyDir, pyContextScript), pyContext);
 
         const buffer = Buffer.from(options.script);
         if(isGzip(buffer)) {
